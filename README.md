@@ -1,0 +1,146 @@
+# Jellyfin Media Integrity
+
+Detect container and stream issues in a Jellyfin library and repair eligible files with lossless FFmpeg stream copy.
+
+Current release line: v1.0.0. Real remux is fully supported as an explicit opt-in; safe defaults remain unchanged.
+
+## Features
+
+- **Media Integrity Scan**: inspect supported library files with ffprobe, classify Healthy / Warning / RemuxRecommended / Corrupted / Unreadable, and persist a repair queue.
+- **Media Remux Repair**: remux every stream with `-map 0 -c copy`, validate streams, codecs, chapters, duration and a full packet-copy pass, then optionally replace through the writable mirror.
+- Dry-run enabled by default; at most one real repair per task run.
+- Transactional backups, SHA-256 recovery manifests, collision-safe names and rollback on detected replacement failure.
+- Playback checks before remux, before replacement preparation and immediately before the final swap.
+- Existing Jellyfin configuration page with persisted last-scan statistics.
+
+## Compatibility and prerequisites
+
+Target: **Jellyfin Server 10.11.11**, **.NET 9**. The plugin uses the Jellyfin-provided FFmpeg and ffprobe at `/usr/lib/jellyfin-ffmpeg/` when available, falling back to `ffmpeg`/`ffprobe` on `PATH`. Keep Jellyfin pinned to a tested version; `latest` may change compatibility.
+
+Tested on: Linux ARM64 (Raspberry Pi 4, Docker). The plugin itself is not specific to any architecture, operating system, or container runtime.
+
+Provide sufficient free disk space for the original backup, remux and replacement staging copy. Normal library paths must live under `/media`; map the same host directories under `/repair-media`. The Jellyfin process needs write permissions on repair, backup, cache and config directories. The plugin never invokes sudo.
+
+## Installation
+
+1. Download the ZIP from [GitHub Releases](https://github.com/Trycky64/Jellyfin.Plugin.MediaIntegrity/releases).
+2. Stop Jellyfin. Extract `Jellyfin.Plugin.MediaIntegrity.dll` and `meta.json` into `/config/plugins/Media Integrity/`. Replace both files when upgrading. Do not keep duplicate plugin DLLs in other plugin directories.
+3. Start Jellyfin and confirm Media Integrity appears in Dashboard -> Plugins and both tasks appear under Scheduled Tasks.
+4. Open the plugin configuration, check paths, leave **Dry run enabled**, and save.
+
+## Recommended Docker mounts
+
+```yaml
+services:
+  jellyfin:
+    image: jellyfin/jellyfin:10.11.11
+    volumes:
+      - <your-media>/Movies:/media/Movies:ro
+      - <your-media>/series:/media/series:ro
+      - <your-media>/Movies:/repair-media/Movies:rw
+      - <your-media>/series:/repair-media/series:rw
+      - <your-backups>:/repair-backups:rw
+      - ./cache:/cache:rw
+      - ./config:/config:rw
+```
+
+Replace `<your-media>` with the host path to your media library and `<your-backups>` with the host path where repair backups should be stored.
+
+Never make `/media` writable. Create the backup and cache directories before starting a task. Replacement staging files are created beside the writable destination so the final rename stays on the same filesystem; remux temporary files live under `/cache/media-integrity`.
+
+## Configuration
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| DryRun | true | Remux and validate in cache without backing up or replacing media |
+| MaxRepairsPerRun | 1 | Maximum real repair candidates per run |
+| EnableVideoFiles / EnableAudioFiles | true / true | Categories included in scans |
+| SourceRoot | /media | Read-only library root |
+| RepairRoot | /repair-media | Writable mirror of the same source tree |
+| BackupRoot | /repair-backups | Permanent original backups |
+| TempRoot | /cache/media-integrity | Remux workspace |
+| ProbeTimeoutSeconds | 120 | Per-probe timeout |
+| MaxParallelProbes | 1 | Reserved concurrency ceiling; current scanner runs sequentially |
+| PreserveOriginalContainer | true | Current remux always preserves the extension/container |
+| AllowRepairOfCorrupted | false | Opt-in for eligible corruption; unreadable sources still fail validation |
+| ValidateFullPacketPass | true | Full packet-copy validation; keep enabled |
+| KeepBackups | true | Legacy setting; backups are always retained, including when false |
+| MaxRepairAttempts | 3 | Automatic retry cap; see retry rules below |
+| RemuxTimeoutSeconds / ValidationTimeoutSeconds | 3600 / 3600 | Process timeouts |
+| DurationToleranceSeconds | 2 | Maximum source/output duration difference |
+
+Supported video extensions: MP4, M4V, MKV, WebM, MOV, AVI, TS, M2TS, MTS, MPG, MPEG.
+Supported audio extensions: M4A, MP3, FLAC, OGG, OPUS, AAC. Extension support does not guarantee that every codec/container combination can be remuxed.
+
+## Scan and queue
+
+Run **Media Integrity Scan** from Scheduled Tasks. It scans supported files known to Jellyfin, rather than arbitrary unindexed files. A completed scan writes `/config/data/media-integrity/repair-queue.json` and `/config/data/media-integrity/last-scan.json`. A cancelled scan leaves the previous completed queue/statistics intact. The UI shows the last completed scan, not live progress or current repair totals.
+
+Warnings alone do not enter the repair queue. Unreadable files never enter it. Some corrupted files are only queued when a repairable issue exists without a critical issue. Scan and repair executions are serialized. A waiting task can be cancelled without changing the active task or queue. A completed scan creates a new queue snapshot. Queue browsing in the GUI is deferred.
+
+## Repair and DryRun
+
+Start with a scan, inspect logs and run **Media Remux Repair** with DryRun=true. Dry-run still performs remux and validation in cache, but never replaces originals and does not consume attempts. Pending items remain pending.
+
+Real repair is opt-in: disable DryRun deliberately, keep MaxRepairsPerRun=1, run the task, inspect its result, then restore DryRun=true. The plugin does not expose encoder arguments or codec conversion. All FFmpeg invocations use `-c copy`. Media reported as playing is deferred. A final playback check after backup/staging prevents replacement if a session starts during preparation. The writable mirror must exist and its SHA-256 must still match the backed-up source; a wrong mount or changed file aborts the swap.
+
+Since v0.2, failed entries with a consumed attempt are retried on later task runs until MaxRepairAttempts. Rejected paths with zero attempts are excluded. Entries left Processing after an abrupt crash require manual inspection of the backup manifest and current media before retry; the outcome may be ambiguous. A new scan generates a fresh queue, so do not use repeated scans to bypass the attempt cap.
+
+## Backups and recovery
+
+`/media/series/Show/episode.mp4` maps to `/repair-backups/series/Show/episode.mp4`. Collisions add `.original-<UTC timestamp>-<unique id>` before the extension. Every successful backup transaction writes `<backup>.metadata.json` with schema version, source/backup/repaired paths, timestamp, SHA-256 hashes, algorithm and plugin version **before replacement**.
+
+The repaired hash describes the validated replacement candidate. A manifest is a recovery record, not proof that the swap completed: cancellation or failure can leave a backup/manifest without an installed repair. Compare hashes against the current file. Backups are never automatically deleted, including legacy KeepBackups=false. A future **Clean Media Repair Backups** task can use these versioned manifests; it is not shipped in v0.1.
+
+To restore manually:
+
+1. Enable DryRun, stop repair tasks and stop playback/Jellyfin.
+2. Read the manifest and verify the backup's SHA-256 against backupHash. Keep the backup and manifest.
+3. Copy the backup to a new staging file beside the destination under `/repair-media`; verify the staged SHA-256 again, then rename over the destination. Do not copy through `/media`.
+4. Restart Jellyfin, refresh the affected item and run a new integrity scan.
+
+The plugin attempts rollback from the verified backup after a detected post-swap failure. An abrupt power loss cannot execute in-process rollback; use the manifest and retained backup for recovery. Keep a separate independent backup of valuable media.
+
+## Security
+
+- Source, cache, repair and backup paths are checked against configured roots.
+- Path traversal and symbolic links/reparse points are rejected; destinations are revalidated before the swap.
+- Source library mounts remain read-only; media changes use only the repair mirror.
+- All streams are mapped; codec, stream count, resolution/audio parameters, chapters and duration are compared before replacement.
+- Statistics API requires Jellyfin administrator authorization.
+- Never edit the queue with untrusted paths, relax directory permissions, or allow untrusted users to mutate repair/cache roots while tasks run.
+
+## Limitations
+
+- Checks are structural and packet-based, not full video/audio decoding or proof that content is visually correct.
+- Filesystem path checks narrow races but cannot guarantee safety against a concurrent privileged filesystem attacker.
+- Playback detection uses Jellyfin sessions, including a final check after the backup/staging copies. External players and playback starting after that final check cannot be locked out by this plugin.
+- No automatic backup cleanup; monitor free disk space.
+- Current scan is sequential; changing MaxParallelProbes does not speed it up.
+- Preservation of all metadata/attachments depends on FFmpeg container support; validation fails closed on detected incompatibility.
+- UI JavaScript and live API were tested; visual browser inspection was unavailable in the validation session.
+
+## Troubleshooting
+
+Read `docker logs <container>` and search for MediaIntegrity, MediaReplacementService or MediaValidationService. A task can finish while individual queue entries have errors; inspect LastError and status. For permission/path failures, inspect `docker inspect <container>`, ensure every root exists, and verify read-only and writable aliases refer to the same host directories. For timeouts, lower workload or deliberately adjust the relevant limit. For failed validation, retain the original and investigate FFmpeg stderr; do not bypass validation.
+
+If a task is interrupted, cancel it in Scheduled Tasks and confirm it becomes idle. Inspect cache and repair destinations for `.repairing.*` or `.replacing` files before restarting. Only remove known orphaned temporary files after confirming no repair is active. Never remove a user backup as cleanup.
+
+## Uninstallation
+
+Enable DryRun, stop tasks and Jellyfin, then remove the plugin installation directory. Keep `/repair-backups` and the queue/statistics/configuration until recovery is no longer needed. Restart Jellyfin. Removing the plugin does not restore already repaired media.
+
+## Build and test from source
+
+```powershell
+dotnet restore Jellyfin.Plugin.MediaIntegrity.sln
+dotnet format Jellyfin.Plugin.MediaIntegrity.sln --verify-no-changes --no-restore
+dotnet build Jellyfin.Plugin.MediaIntegrity.sln -c Release --no-restore
+dotnet test Jellyfin.Plugin.MediaIntegrity.sln -c Release --no-build
+node scripts/test-ui.cjs
+./scripts/package.ps1
+```
+
+The ZIP contains only the plugin DLL and version-matched meta.json; Jellyfin dependencies are supplied by the server. Stable ZIP entry order/timestamps make packaging the same DLL reproducible. CI runs on ubuntu-latest and uploads ZIP and test results.
+
+Integration scripts in `scripts/` target a Docker-based Jellyfin deployment configured via environment variables (`JELLYFIN_URL`, `JELLYFIN_API_KEY`, `JELLYFIN_CONTAINER`, `JELLYFIN_CONFIG_ROOT`, `JELLYFIN_MEDIA_ROOT`, `JELLYFIN_BACKUP_ROOT`). They use an existing API key without printing credentials, save the queue before injection and restore safe configuration in a finally block. They require pre-existing synthetic fixtures under `/cache/media-integrity-fixtures/sources`. They never generate encoded media or alter user originals. Evidence is recorded under [docs/validation](docs/validation).

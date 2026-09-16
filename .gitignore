@@ -1,0 +1,64 @@
+# .NET
+bin/
+obj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# VS Code local-only settings
+.vscode/settings.local.json
+
+# Build / packaging
+publish/
+artifacts/
+dist/
+deploy/
+tmp/
+
+# Tests / coverage
+TestResults/
+coverage/
+coverage.*
+*.trx
+
+# NuGet
+*.nupkg
+*.snupkg
+
+# Logs
+*.log
+
+# Environment/local configuration
+.env
+.env.*
+!.env.example
+
+# Secrets and credentials
+*.key
+*.pem
+*.pfx
+*.p12
+secrets.*
+credentials.*
+
+# Database files
+jellyfin.db
+jellyfin*.db
+*.sqlite
+*.sqlite3
+
+# Runtime and local outputs
+logs/
+dumps/
+captures/
+backups/
+__pycache__/
+
+# OS
+.DS_Store
+Thumbs.db
+
+#Development files
+todo.txt

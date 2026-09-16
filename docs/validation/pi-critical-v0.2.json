@@ -1,0 +1,11 @@
+{
+  "retryCap": 3,
+  "unreadableNeverReplaced": true,
+  "hostileQueueRejectedBeforeRemux": true,
+  "dryRunPreservesMediaAndAttempts": true,
+  "scanCancellationPreservesCompletedData": true,
+  "concurrentRepairWaitsAndCancels": true,
+  "safeConfigurationRestored": true,
+  "queueRestored": true,
+  "fixturesRemoved": true
+}

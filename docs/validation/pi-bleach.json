@@ -1,0 +1,79 @@
+{
+  "/repair-backups/Example Series - S01E01.original.mp4": {
+    "Status": "RemuxRecommended",
+    "ExitCode": 0,
+    "Streams": [
+      {
+        "Index": 0,
+        "CodecType": "video",
+        "CodecName": "h264",
+        "Profile": "High",
+        "Width": 1920,
+        "Height": 1080,
+        "PixelFormat": "yuv420p",
+        "FrameRate": "24000/1001",
+        "AverageFrameRate": "176555000/7363817",
+        "SampleRate": null,
+        "Channels": null,
+        "Language": "und"
+      },
+      {
+        "Index": 1,
+        "CodecType": "audio",
+        "CodecName": "aac",
+        "Profile": "LC",
+        "Width": null,
+        "Height": null,
+        "PixelFormat": "",
+        "FrameRate": "0/0",
+        "AverageFrameRate": "0/0",
+        "SampleRate": 44100,
+        "Channels": 2,
+        "Language": "und"
+      }
+    ],
+    "Issues": [
+      {
+        "Code": "MP4_WRONG_SAMPLE_COUNT",
+        "Message": "Invalid or inconsistent MP4 sample table detected.",
+        "Severity": 2,
+        "RawMessage": "[mov,mp4,m4a,3gp,3g2,mj2 @ 0x7f79650000] wrong sample count"
+      }
+    ]
+  },
+  "/media/series/Example Series/Season 01/Example Series - S01E01.mp4": {
+    "Status": "Ok",
+    "ExitCode": 0,
+    "Streams": [
+      {
+        "Index": 0,
+        "CodecType": "video",
+        "CodecName": "h264",
+        "Profile": "High",
+        "Width": 1920,
+        "Height": 1080,
+        "PixelFormat": "yuv420p",
+        "FrameRate": "24000/1001",
+        "AverageFrameRate": "635598000/26509741",
+        "SampleRate": null,
+        "Channels": null,
+        "Language": "und"
+      },
+      {
+        "Index": 1,
+        "CodecType": "audio",
+        "CodecName": "aac",
+        "Profile": "LC",
+        "Width": null,
+        "Height": null,
+        "PixelFormat": "",
+        "FrameRate": "0/0",
+        "AverageFrameRate": "0/0",
+        "SampleRate": 44100,
+        "Channels": 2,
+        "Language": "und"
+      }
+    ],
+    "Issues": []
+  }
+}

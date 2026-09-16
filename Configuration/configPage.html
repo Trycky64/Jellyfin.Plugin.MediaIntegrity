@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Media Integrity</title>
+</head>
+
+<body>
+<div
+    id="MediaIntegrityConfigurationPage"
+    data-role="page"
+    class="page type-interior pluginConfigurationPage"
+    data-require="emby-input,emby-button,emby-checkbox">
+
+    <div data-role="content">
+        <div class="content-primary">
+
+            <h1>Media Integrity</h1>
+
+            <p>
+                Scan media files for structural problems and safely repair
+                supported issues using lossless stream-copy remuxing.
+            </p>
+
+            <h2>Last completed scan</h2>
+            <div id="LastScanStats" role="status" aria-live="polite">No completed scan yet.</div>
+
+            <form id="MediaIntegrityConfigurationForm">
+
+                <h2>Safety</h2>
+
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label>
+                        <input
+                            id="DryRun"
+                            type="checkbox"
+                            is="emby-checkbox" />
+
+                        <span>Dry run</span>
+                    </label>
+
+                    <div class="fieldDescription">
+                        Validate repairs without replacing media files.
+                        Recommended for normal operation.
+                    </div>
+                </div>
+
+                <div class="inputContainer">
+                    <label
+                        class="inputLabel inputLabelUnfocused"
+                        for="MaxRepairsPerRun">
+                        Maximum repairs per run
+                    </label>
+
+                    <input
+                        id="MaxRepairsPerRun"
+                        type="number"
+                        min="1"
+                        step="1"
+                        is="emby-input" />
+
+                    <div class="fieldDescription">
+                        Maximum number of files that may be modified during
+                        one real repair task. Default: 1.
+                    </div>
+                </div>
+
+                <div class="inputContainer">
+                    <label
+                        class="inputLabel inputLabelUnfocused"
+                        for="MaxRepairAttempts">
+                        Maximum repair attempts
+                    </label>
+
+                    <input
+                        id="MaxRepairAttempts"
+                        type="number"
+                        min="1"
+                        step="1"
+                        is="emby-input" />
+                </div>
+
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label>
+                        <input
+                            id="AllowRepairOfCorrupted"
+                            type="checkbox"
+                            is="emby-checkbox" />
+
+                        <span>Allow repair of corrupted files</span>
+                    </label>
+
+                    <div class="fieldDescription">
+                        Allows files classified as Corrupted to enter the
+                        automatic repair pipeline. Keep disabled unless
+                        explicitly required.
+                    </div>
+                </div>
+
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label>
+                        <input
+                            id="ValidateFullPacketPass"
+                            type="checkbox"
+                            is="emby-checkbox" />
+
+                        <span>Full packet validation</span>
+                    </label>
+
+                    <div class="fieldDescription">
+                        Run a complete ffmpeg packet-copy pass before replacing
+                        the original media.
+                    </div>
+                </div>
+
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label>
+                        <input
+                            id="KeepBackups"
+                            disabled
+                            type="checkbox"
+                            is="emby-checkbox" />
+
+                        <span>Keep original backups</span>
+                    </label>
+
+                    <div class="fieldDescription">
+                        Preserve the original media file after a successful
+                        replacement.
+                    </div>
+                </div>
+
+                <h2>Scan</h2>
+
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label>
+                        <input
+                            id="EnableVideoFiles"
+                            type="checkbox"
+                            is="emby-checkbox" />
+
+                        <span>Scan video files</span>
+                    </label>
+                </div>
+
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label>
+                        <input
+                            id="EnableAudioFiles"
+                            type="checkbox"
+                            is="emby-checkbox" />
+
+                        <span>Scan audio files</span>
+                    </label>
+                </div>
+
+                <div class="inputContainer">
+                    <label
+                        class="inputLabel inputLabelUnfocused"
+                        for="ProbeTimeoutSeconds">
+                        Probe timeout
+                    </label>
+
+                    <input
+                        id="ProbeTimeoutSeconds"
+                        type="number"
+                        min="1"
+                        step="1"
+                        is="emby-input" />
+
+                    <div class="fieldDescription">
+                        Maximum ffprobe duration per file, in seconds.
+                    </div>
+                </div>
+
+                <div class="inputContainer">
+                    <label
+                        class="inputLabel inputLabelUnfocused"
+                        for="MaxParallelProbes">
+                        Parallel probes
+                    </label>
+
+                    <input
+                        id="MaxParallelProbes"
+                        type="number"
+                        min="1"
+                        step="1"
+                        is="emby-input" />
+
+                    <div class="fieldDescription">
+                        Maximum number of concurrent probing operations.
+                    </div>
+                </div>
+
+                <h2>Paths</h2>
+
+                <div class="inputContainer">
+                    <label
+                        class="inputLabel inputLabelUnfocused"
+                        for="SourceRoot">
+                        Source root
+                    </label>
+
+                    <input
+                        id="SourceRoot"
+                        type="text"
+                        is="emby-input" />
+
+                    <div class="fieldDescription">
+                        Read-only media root as seen by Jellyfin.
+                    </div>
+                </div>
+
+                <div class="inputContainer">
+                    <label
+                        class="inputLabel inputLabelUnfocused"
+                        for="RepairRoot">
+                        Repair root
+                    </label>
+
+                    <input
+                        id="RepairRoot"
+                        type="text"
+                        is="emby-input" />
+
+                    <div class="fieldDescription">
+                        Writable mirror of the source media tree.
+                    </div>
+                </div>
+
+                <div class="inputContainer">
+                    <label
+                        class="inputLabel inputLabelUnfocused"
+                        for="BackupRoot">
+                        Backup root
+                    </label>
+
+                    <input
+                        id="BackupRoot"
+                        type="text"
+                        is="emby-input" />
+
+                    <div class="fieldDescription">
+                        Destination for original files before replacement.
+                    </div>
+                </div>
+
+                <div class="inputContainer">
+                    <label
+                        class="inputLabel inputLabelUnfocused"
+                        for="TempRoot">
+                        Temporary root
+                    </label>
+
+                    <input
+                        id="TempRoot"
+                        type="text"
+                        is="emby-input" />
+
+                    <div class="fieldDescription">
+                        Temporary workspace used for remux and validation.
+                    </div>
+                </div>
+
+                <h2>Remux</h2>
+
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label>
+                        <input
+                            id="PreserveOriginalContainer"
+                            type="checkbox"
+                            is="emby-checkbox" />
+
+                        <span>Preserve original container</span>
+                    </label>
+                </div>
+
+                <div class="inputContainer">
+                    <label
+                        class="inputLabel inputLabelUnfocused"
+                        for="RemuxTimeoutSeconds">
+                        Remux timeout
+                    </label>
+
+                    <input
+                        id="RemuxTimeoutSeconds"
+                        type="number"
+                        min="1"
+                        step="1"
+                        is="emby-input" />
+
+                    <div class="fieldDescription">
+                        Maximum ffmpeg remux duration, in seconds.
+                    </div>
+                </div>
+
+                <div class="inputContainer">
+                    <label
+                        class="inputLabel inputLabelUnfocused"
+                        for="ValidationTimeoutSeconds">
+                        Validation timeout
+                    </label>
+
+                    <input
+                        id="ValidationTimeoutSeconds"
+                        type="number"
+                        min="1"
+                        step="1"
+                        is="emby-input" />
+
+                    <div class="fieldDescription">
+                        Maximum full validation duration, in seconds.
+                    </div>
+                </div>
+
+                <div class="inputContainer">
+                    <label
+                        class="inputLabel inputLabelUnfocused"
+                        for="DurationToleranceSeconds">
+                        Duration tolerance
+                    </label>
+
+                    <input
+                        id="DurationToleranceSeconds"
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        is="emby-input" />
+
+                    <div class="fieldDescription">
+                        Maximum accepted source/output duration difference,
+                        in seconds.
+                    </div>
+                </div>
+
+                <br />
+
+                <button
+                    is="emby-button"
+                    type="submit"
+                    class="raised button-submit block emby-button">
+
+                    <span>Save</span>
+                </button>
+
+            </form>
+
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        (function () {
+            const pluginId =
+                'b8dc8a71-3d33-4e51-b4d6-8ea09f8db491';
+
+            const page =
+                document.querySelector(
+                    '#MediaIntegrityConfigurationPage');
+
+            const form =
+                document.querySelector(
+                    '#MediaIntegrityConfigurationForm');
+
+            function setValue(id, value) {
+                const element =
+                    document.getElementById(id);
+
+                if (element) {
+                    element.value =
+                        value ?? '';
+                }
+            }
+
+            function setChecked(id, value) {
+                const element =
+                    document.getElementById(id);
+
+                if (element) {
+                    element.checked =
+                        Boolean(value);
+                }
+            }
+
+            function getInteger(id) {
+                return parseInt(
+                    document.getElementById(id).value,
+                    10);
+            }
+
+            function getNumber(id) {
+                return Number(
+                    document.getElementById(id).value);
+            }
+
+            function loadStatistics() {
+                ApiClient.getJSON(ApiClient.getUrl('MediaIntegrity/LastScan'))
+                    .then(function (stats) {
+                        const target = document.getElementById('LastScanStats');
+                        if (!stats) {
+                            target.textContent = 'No completed scan yet.';
+                            return;
+                        }
+                        // Jellyfin serializes API properties using its server naming policy.
+                        const value = function (name) {
+                            return stats[name] ?? stats[name.charAt(0).toLowerCase() + name.slice(1)];
+                        };
+                        target.textContent =
+                            'Last scan: ' + new Date(value('LastScanDate')).toLocaleString() +
+                            ' | Checked: ' + value('Checked') +
+                            ' | Healthy: ' + value('Healthy') +
+                            ' | Warnings: ' + value('Warnings') +
+                            ' | Queued: ' + value('Queued') +
+                            ' | Unreadable: ' + value('Unreadable') +
+                            ' | Corrupted: ' + value('Corrupted');
+                    })
+                    .catch(function () {
+                        document.getElementById('LastScanStats').textContent =
+                            'Unable to load scan statistics. Check server logs and administrator access.';
+                    });
+            }
+
+            function loadConfiguration() {
+                loadStatistics();
+                Dashboard.showLoadingMsg();
+
+                ApiClient
+                    .getPluginConfiguration(pluginId)
+                    .then(function (config) {
+                        setChecked(
+                            'DryRun',
+                            config.DryRun);
+
+                        setChecked(
+                            'EnableVideoFiles',
+                            config.EnableVideoFiles);
+
+                        setChecked(
+                            'EnableAudioFiles',
+                            config.EnableAudioFiles);
+
+                        setValue(
+                            'ProbeTimeoutSeconds',
+                            config.ProbeTimeoutSeconds);
+
+                        setValue(
+                            'MaxParallelProbes',
+                            config.MaxParallelProbes);
+
+                        setValue(
+                            'SourceRoot',
+                            config.SourceRoot);
+
+                        setValue(
+                            'RepairRoot',
+                            config.RepairRoot);
+
+                        setValue(
+                            'BackupRoot',
+                            config.BackupRoot);
+
+                        setValue(
+                            'TempRoot',
+                            config.TempRoot);
+
+                        setChecked(
+                            'PreserveOriginalContainer',
+                            config.PreserveOriginalContainer);
+
+                        setChecked(
+                            'AllowRepairOfCorrupted',
+                            config.AllowRepairOfCorrupted);
+
+                        setChecked(
+                            'ValidateFullPacketPass',
+                            config.ValidateFullPacketPass);
+
+                        setChecked(
+                            'KeepBackups',
+                            true);
+
+                        setValue(
+                            'MaxRepairAttempts',
+                            config.MaxRepairAttempts);
+
+                        setValue(
+                            'MaxRepairsPerRun',
+                            config.MaxRepairsPerRun);
+
+                        setValue(
+                            'RemuxTimeoutSeconds',
+                            config.RemuxTimeoutSeconds);
+
+                        setValue(
+                            'ValidationTimeoutSeconds',
+                            config.ValidationTimeoutSeconds);
+
+                        setValue(
+                            'DurationToleranceSeconds',
+                            config.DurationToleranceSeconds);
+
+                        Dashboard.hideLoadingMsg();
+                    })
+                    .catch(function (error) {
+                        Dashboard.hideLoadingMsg();
+
+                        console.error(
+                            'Unable to load Media Integrity configuration.',
+                            error);
+                    });
+            }
+
+            function validateConfiguration() {
+                const positiveIntegerFields = [
+                    'ProbeTimeoutSeconds',
+                    'MaxParallelProbes',
+                    'MaxRepairAttempts',
+                    'MaxRepairsPerRun',
+                    'RemuxTimeoutSeconds',
+                    'ValidationTimeoutSeconds'
+                ];
+
+                for (const id of positiveIntegerFields) {
+                    const value =
+                        getInteger(id);
+
+                    if (!Number.isInteger(value)
+                        || value <= 0) {
+                        window.alert(
+                            id + ' must be greater than zero.');
+
+                        return false;
+                    }
+                }
+
+                const tolerance =
+                    getNumber('DurationToleranceSeconds');
+
+                if (!Number.isFinite(tolerance)
+                    || tolerance < 0) {
+                    window.alert(
+                        'DurationToleranceSeconds cannot be negative.');
+
+                    return false;
+                }
+
+                const pathFields = [
+                    'SourceRoot',
+                    'RepairRoot',
+                    'BackupRoot',
+                    'TempRoot'
+                ];
+
+                for (const id of pathFields) {
+                    const value =
+                        document
+                            .getElementById(id)
+                            .value
+                            .trim();
+
+                    if (value.length === 0) {
+                        window.alert(
+                            id + ' cannot be empty.');
+
+                        return false;
+                    }
+
+                    if (!value.startsWith('/')) {
+                        window.alert(
+                            id + ' must be an absolute Linux path.');
+
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+
+            function saveConfiguration(event) {
+                event.preventDefault();
+
+                if (!validateConfiguration()) {
+                    return false;
+                }
+
+                Dashboard.showLoadingMsg();
+
+                ApiClient
+                    .getPluginConfiguration(pluginId)
+                    .then(function (config) {
+                        config.DryRun =
+                            document
+                                .getElementById('DryRun')
+                                .checked;
+
+                        config.EnableVideoFiles =
+                            document
+                                .getElementById('EnableVideoFiles')
+                                .checked;
+
+                        config.EnableAudioFiles =
+                            document
+                                .getElementById('EnableAudioFiles')
+                                .checked;
+
+                        config.ProbeTimeoutSeconds =
+                            getInteger('ProbeTimeoutSeconds');
+
+                        config.MaxParallelProbes =
+                            getInteger('MaxParallelProbes');
+
+                        config.SourceRoot =
+                            document
+                                .getElementById('SourceRoot')
+                                .value
+                                .trim();
+
+                        config.RepairRoot =
+                            document
+                                .getElementById('RepairRoot')
+                                .value
+                                .trim();
+
+                        config.BackupRoot =
+                            document
+                                .getElementById('BackupRoot')
+                                .value
+                                .trim();
+
+                        config.TempRoot =
+                            document
+                                .getElementById('TempRoot')
+                                .value
+                                .trim();
+
+                        config.PreserveOriginalContainer =
+                            document
+                                .getElementById('PreserveOriginalContainer')
+                                .checked;
+
+                        config.AllowRepairOfCorrupted =
+                            document
+                                .getElementById('AllowRepairOfCorrupted')
+                                .checked;
+
+                        config.ValidateFullPacketPass =
+                            document
+                                .getElementById('ValidateFullPacketPass')
+                                .checked;
+
+                        config.KeepBackups = true;
+
+                        config.MaxRepairAttempts =
+                            getInteger('MaxRepairAttempts');
+
+                        config.MaxRepairsPerRun =
+                            getInteger('MaxRepairsPerRun');
+
+                        config.RemuxTimeoutSeconds =
+                            getInteger('RemuxTimeoutSeconds');
+
+                        config.ValidationTimeoutSeconds =
+                            getInteger('ValidationTimeoutSeconds');
+
+                        config.DurationToleranceSeconds =
+                            getNumber('DurationToleranceSeconds');
+
+                        return ApiClient
+                            .updatePluginConfiguration(
+                                pluginId,
+                                config);
+                    })
+                    .then(function (result) {
+                        Dashboard
+                            .processPluginConfigurationUpdateResult(
+                                result);
+                    })
+                    .catch(function (error) {
+                        Dashboard.hideLoadingMsg();
+
+                        console.error(
+                            'Unable to save Media Integrity configuration.',
+                            error);
+
+                        window.alert(
+                            'Unable to save Media Integrity configuration.');
+                    });
+
+                return false;
+            }
+
+            page.addEventListener(
+                'pageshow',
+                loadConfiguration);
+
+            form.addEventListener(
+                'submit',
+                saveConfiguration);
+        })();
+    </script>
+
+</div>
+</body>
+</html>

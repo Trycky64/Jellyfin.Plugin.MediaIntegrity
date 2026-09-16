@@ -1,0 +1,60 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>
+        runtime;
+        build;
+        native;
+        contentfiles;
+        analyzers;
+        buildtransitive
+      </IncludeAssets>
+    </PackageReference>
+
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+
+    <PackageReference Include="xunit" Version="2.9.3" />
+
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>
+        runtime;
+        build;
+        native;
+        contentfiles;
+        analyzers;
+        buildtransitive
+      </IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <!--
+    The production plugin excludes Jellyfin runtime assemblies because
+    Jellyfin provides them when loading the plugin.
+
+    The standalone xUnit test host does not run inside Jellyfin, so it
+    requires its own runtime copies of the Jellyfin assemblies.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Jellyfin.Controller" Version="10.11.11" />
+    <PackageReference Include="Jellyfin.Model" Version="10.11.11" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Jellyfin.Plugin.MediaIntegrity.csproj" />
+  </ItemGroup>
+
+</Project>

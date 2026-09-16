@@ -1,0 +1,27 @@
+{
+  "probeTimeout": {
+    "Passed": true,
+    "Seconds": 1.1458062
+  },
+  "probeCancellation": {
+    "Passed": true,
+    "Seconds": 0.2604225
+  },
+  "remuxTimeout": {
+    "Passed": true,
+    "Seconds": 1.0423634
+  },
+  "remuxCancellation": {
+    "Passed": true,
+    "Seconds": 0.2632384
+  },
+  "packetValidationTimeout": {
+    "Passed": true,
+    "Seconds": 1.0106035
+  },
+  "packetValidationCancellation": {
+    "Passed": true,
+    "Seconds": 0.2586311
+  },
+  "noOrphanedTemporaryFiles": true
+}

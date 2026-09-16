@@ -1,0 +1,14 @@
+{
+  "retryCap": 3,
+  "unreadableNeverReplaced": true,
+  "hostileQueueRejectedBeforeRemux": true,
+  "dryRunPreservesMediaAndAttempts": true,
+  "healthyMKVUnchanged": true,
+  "healthyM4AUnchanged": true,
+  "sourceSymlinkRejected": true,
+  "scanCancellationPreservesCompletedData": true,
+  "concurrentRepairWaitsAndCancels": true,
+  "safeConfigurationRestored": true,
+  "queueRestored": true,
+  "fixturesRemoved": true
+}

@@ -1,0 +1,115 @@
+{
+  "timestampUtc": "2026-09-15T16:40:40.649120+00:00",
+  "formats": {
+    "mp4": {
+      "backupMetadata": true,
+      "hashes": true,
+      "streamsPreserved": true,
+      "collision": true,
+      "originalHash": "24EDCEA9A0B10EBC5AF3F11D7B5FC88CFFF281B36FC340DDB945AF38F398C9AC",
+      "repairedHash": "D3FD2CE3C504A6F8636E766F9F07C64B2878868A30A9D4F49390772EA307342D"
+    },
+    "mkv": {
+      "backupMetadata": true,
+      "hashes": true,
+      "streamsPreserved": true,
+      "collision": false,
+      "originalHash": "8598935D17171C0F43B839678AD523A34AED3D1020016D6840B41C75311166B8",
+      "repairedHash": "103611EF82C41DEE2A9447CD22377481CB491594E9E2DFB468F2DA5F7BE9F512"
+    },
+    "m4v": {
+      "backupMetadata": true,
+      "hashes": true,
+      "streamsPreserved": true,
+      "collision": false,
+      "originalHash": "3B21A679F93B9728F7E45E8F1A22A3B3DC5F07C3E32E793D31825A30F7A043A8",
+      "repairedHash": "46A0C98E098BCFF2FDC00123AD55965521A17BE8A4F72CC1AC6CAAF914DEBB33"
+    },
+    "mov": {
+      "backupMetadata": true,
+      "hashes": true,
+      "streamsPreserved": true,
+      "collision": false,
+      "originalHash": "8D226353CAC526688993030A462B08E39026FBAB29EA5075723D2A0437777182",
+      "repairedHash": "AA739DC36F2D88A160824C92CDEF956AA67FA92C8DFB3FEF3E047770BB0BF216"
+    },
+    "webm": {
+      "backupMetadata": true,
+      "hashes": true,
+      "streamsPreserved": true,
+      "collision": false,
+      "originalHash": "ACEB8F452C805315973481BACAD694C29FE8F5F78C15DBDADC16124C6CC788B3",
+      "repairedHash": "6C85534E6DCB59B22EF84FB78B89DF4A6D546A28663B1B293A0B2DB66DAD6476"
+    },
+    "avi": {
+      "backupMetadata": true,
+      "hashes": true,
+      "streamsPreserved": true,
+      "collision": false,
+      "originalHash": "01869D1C037A5401FD46D22681713A3AC4CF6E167C36CA418CB19B3A0F9A13AE",
+      "repairedHash": "E69DA28B1838F722A05E30CAB1422E7A3B439F30A43C167DF1CC4F54F3870574"
+    },
+    "ts": {
+      "backupMetadata": true,
+      "hashes": true,
+      "streamsPreserved": true,
+      "collision": false,
+      "originalHash": "D8EC5F15B27A69630C3001AF313F837523CABC5256A7881E2CE13C30EE79093D",
+      "repairedHash": "D8EC5F15B27A69630C3001AF313F837523CABC5256A7881E2CE13C30EE79093D"
+    },
+    "m2ts": {
+      "backupMetadata": true,
+      "hashes": true,
+      "streamsPreserved": true,
+      "collision": false,
+      "originalHash": "D98A4CE7932EE82FED725BB38C47BEEDC203378CC8A89A473C15AC57CAC665E2",
+      "repairedHash": "D98A4CE7932EE82FED725BB38C47BEEDC203378CC8A89A473C15AC57CAC665E2"
+    },
+    "mpg": {
+      "backupMetadata": true,
+      "hashes": true,
+      "streamsPreserved": true,
+      "collision": false,
+      "originalHash": "4F6D86B254EA03A169957F9ADF2D2061688BA64B38E5791EA75268546A9AA1D7",
+      "repairedHash": "6748D8ABF3DDBEC0B9746D21D4F23CC580C9A1DDAD6071D59A85EF20091A2CA6"
+    },
+    "mpeg": {
+      "backupMetadata": true,
+      "hashes": true,
+      "streamsPreserved": true,
+      "collision": false,
+      "originalHash": "4F6D86B254EA03A169957F9ADF2D2061688BA64B38E5791EA75268546A9AA1D7",
+      "repairedHash": "6748D8ABF3DDBEC0B9746D21D4F23CC580C9A1DDAD6071D59A85EF20091A2CA6"
+    },
+    "m4a": {
+      "backupMetadata": true,
+      "hashes": true,
+      "streamsPreserved": true,
+      "collision": false,
+      "originalHash": "ACF45E5E79265C602182D11813E566C4D3822A5BD27804CF6E93D2DCB00E4760",
+      "repairedHash": "999EE0BDC703886E2129BF5C3E9BB2286681DC04B91FC480D86FCCA41D7FC7E4"
+    },
+    "flac": {
+      "backupMetadata": true,
+      "hashes": true,
+      "streamsPreserved": true,
+      "collision": false,
+      "originalHash": "E81F98924ECEC6538E45F53CEA911DA5B403996F083BF114F9939704292B9D44",
+      "repairedHash": "E81F98924ECEC6538E45F53CEA911DA5B403996F083BF114F9939704292B9D44"
+    },
+    "opus": {
+      "backupMetadata": true,
+      "hashes": true,
+      "streamsPreserved": true,
+      "collision": false,
+      "originalHash": "BB5A8F5C1CB4B5C5EF0F2714D59C97F99018B288FF13990A761ECDD7B4CE44ED",
+      "repairedHash": "C6816004A40745E5C69381483C1C6587A401591CBB675053D71BE5A118F2FB48"
+    }
+  },
+  "queueBackup": "/tmp/release-f378d8cf6d934b008df268d123acc969-queue.json",
+  "restartPersistence": true,
+  "mediaReadOnly": true,
+  "safeConfiguration": true,
+  "queueRestored": true,
+  "fixturesRemoved": true
+}
