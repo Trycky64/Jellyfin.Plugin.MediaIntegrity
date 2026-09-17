@@ -48,5 +48,7 @@ public sealed class PluginConfigurationServiceTests
         Assert.Equal("/cache/media-integrity", configuration.TempRoot);
         Assert.Equal(0.05, configuration.StreamDurationToleranceSeconds);
         Assert.Equal(0.01, configuration.StreamStartTimeToleranceSeconds);
+        Assert.True(configuration.EnableAudioVideoSyncCheck);
+        Assert.False(configuration.EnablePacketTimelineAnalysis);
     }
 }

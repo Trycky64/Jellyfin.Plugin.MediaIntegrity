@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.0
+
+- Detect and report source audio/video start, duration and end timeline differences per video/audio stream pair.
+- Report structured, diagnostic-only A/V reason codes. No automatic synchronization, stream removal or transcoding is performed.
+- Add per-track language, title, disposition and A/V ratio context, bounded last-scan diagnostics, and an optional packet timestamp check.
+- Validate source diagnostics, multi-audio, controlled false-positive cases, packet timeout/cancellation and performance on Raspberry Pi 4.
+
 ## 1.0.1
 
 - Reject a stream-copy remux candidate when it changes the duration or start
@@ -16,5 +23,3 @@
 This release does not add encoding, `atempo`, `asetpts`, resampling, or codec
 conversion. `DryRun=true`, `MaxRepairsPerRun=1`, and all other safety defaults
 remain unchanged.
-
-

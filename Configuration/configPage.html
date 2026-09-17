@@ -23,6 +23,7 @@
 
             <h2>Last completed scan</h2>
             <div id="LastScanStats" role="status" aria-live="polite">No completed scan yet.</div>
+            <pre id="LastScanAvDiagnostics" aria-live="polite"></pre>
 
             <form id="MediaIntegrityConfigurationForm">
 
@@ -41,6 +42,26 @@
                     <div class="fieldDescription">
                         Validate repairs without replacing media files.
                         Recommended for normal operation.
+                    </div>
+                </div>
+
+                <div class="inputContainer">
+                    <label
+                        class="inputLabel inputLabelUnfocused"
+                        for="MaxRepairsPerRun">
+                        Maximum repairs per run
+                    </label>
+
+                    <input
+                        id="MaxRepairsPerRun"
+                        type="number"
+                        min="1"
+                        step="1"
+                        is="emby-input" />
+
+                    <div class="fieldDescription">
+                        Maximum number of files that may be modified during
+                        one real repair task. Default: 1.
                     </div>
                 </div>
 
@@ -81,26 +102,6 @@
                     <div class="fieldDescription">
                         Maximum accepted start-time change per audio or video stream,
                         in seconds.
-                    </div>
-                </div>
-
-                <div class="inputContainer">
-                    <label
-                        class="inputLabel inputLabelUnfocused"
-                        for="MaxRepairsPerRun">
-                        Maximum repairs per run
-                    </label>
-
-                    <input
-                        id="MaxRepairsPerRun"
-                        type="number"
-                        min="1"
-                        step="1"
-                        is="emby-input" />
-
-                    <div class="fieldDescription">
-                        Maximum number of files that may be modified during
-                        one real repair task. Default: 1.
                     </div>
                 </div>
 
@@ -149,6 +150,32 @@
                     <div class="fieldDescription">
                         Run a complete ffmpeg packet-copy pass before replacing
                         the original media.
+                    </div>
+                </div>
+
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label>
+                        <input
+                            id="EnableAudioVideoSyncCheck"
+                            type="checkbox"
+                            is="emby-checkbox" />
+                        <span>Check audio/video sync during scans</span>
+                    </label>
+                    <div class="fieldDescription">
+                        Lightweight stream timeline diagnostics. Enabled by default.
+                    </div>
+                </div>
+
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label>
+                        <input
+                            id="EnablePacketTimelineAnalysis"
+                            type="checkbox"
+                            is="emby-checkbox" />
+                        <span>Analyze first and last packet timestamps during scans</span>
+                    </label>
+                    <div class="fieldDescription">
+                        Optional bounded ffprobe pass for deeper A/V drift diagnostics. Disabled by default.
                     </div>
                 </div>
 
@@ -437,6 +464,7 @@
                         const target = document.getElementById('LastScanStats');
                         if (!stats) {
                             target.textContent = 'No completed scan yet.';
+                            document.getElementById('LastScanAvDiagnostics').textContent = '';
                             return;
                         }
                         // Jellyfin serializes API properties using its server naming policy.
@@ -450,7 +478,47 @@
                             ' | Warnings: ' + value('Warnings') +
                             ' | Queued: ' + value('Queued') +
                             ' | Unreadable: ' + value('Unreadable') +
-                            ' | Corrupted: ' + value('Corrupted');
+                            ' | Corrupted: ' + value('Corrupted')
+                            + ' | A/V affected: ' + (value('AudioVideoAffectedMedia') ?? 0)
+                            + ' | A/V offsets: ' + (value('AudioVideoStartOffsets') ?? 0)
+                            + ' | Duration differences: ' + (value('AudioVideoDurationMismatches') ?? 0)
+                            + ' | End differences: ' + (value('AudioVideoEndMismatches') ?? 0)
+                            + ' | Suspected progressive drift: ' + (value('AudioVideoSuspectedDrifts') ?? 0)
+                            + ' | Incomplete timeline: ' + (value('TimelineDataIncomplete') ?? 0);
+
+                        const labels = {
+                            AudioVideoStartOffset: 'Audio/video start offset',
+                            AudioVideoDurationMismatch: 'Audio/video duration difference',
+                            AudioVideoEndMismatch: 'Audio/video end difference',
+                            AudioVideoDriftSuspected: 'Suspected progressive drift',
+                            AudioVideoPacketDriftSuspected: 'Packet timestamp drift suspected',
+                            TimelineDataIncomplete: 'Incomplete timeline data'
+                        };
+                        const seconds = function (number) {
+                            return typeof number === 'number' && Number.isFinite(number)
+                                ? number.toFixed(3) + ' s (' + (number * 1000).toFixed(0) + ' ms)'
+                                : 'unknown';
+                        };
+                        const diagnostics = value('AudioVideoDiagnostics') ?? [];
+                        document.getElementById('LastScanAvDiagnostics').textContent =
+                            diagnostics.map(function (item) {
+                                const field = function (name) {
+                                    return item[name] ?? item[name.charAt(0).toLowerCase() + name.slice(1)];
+                                };
+                                return (field('FileName') || 'Media') + ': '
+                                    + (labels[field('Code')] || field('Code'))
+                                    + ' | video ' + field('VideoStreamIndex')
+                                    + ' / audio ' + field('AudioStreamIndex')
+                                    + (field('AudioLanguage') ? ' (' + field('AudioLanguage') + ')' : '')
+                                    + (field('AudioTitle') ? ' ' + field('AudioTitle') : '')
+                                    + (field('AudioIsDefault') ? ' [default]' : '')
+                                    + ' | start ' + seconds(field('StartDeltaSeconds'))
+                                    + ' | duration ' + seconds(field('DurationDeltaSeconds'))
+                                    + ' | end ' + seconds(field('EndDeltaSeconds'))
+                                    + (typeof field('AudioVideoDurationRatio') === 'number'
+                                        ? ' | duration ratio ' + field('AudioVideoDurationRatio').toFixed(6)
+                                        : '');
+                            }).join('\n');
                     })
                     .catch(function () {
                         document.getElementById('LastScanStats').textContent =
@@ -512,6 +580,14 @@
                         setChecked(
                             'ValidateFullPacketPass',
                             config.ValidateFullPacketPass);
+
+                        setChecked(
+                            'EnableAudioVideoSyncCheck',
+                            config.EnableAudioVideoSyncCheck !== false);
+
+                        setChecked(
+                            'EnablePacketTimelineAnalysis',
+                            config.EnablePacketTimelineAnalysis);
 
                         setChecked(
                             'KeepBackups',
@@ -699,6 +775,16 @@
                         config.ValidateFullPacketPass =
                             document
                                 .getElementById('ValidateFullPacketPass')
+                                .checked;
+
+                        config.EnableAudioVideoSyncCheck =
+                            document
+                                .getElementById('EnableAudioVideoSyncCheck')
+                                .checked;
+
+                        config.EnablePacketTimelineAnalysis =
+                            document
+                                .getElementById('EnablePacketTimelineAnalysis')
                                 .checked;
 
                         config.KeepBackups = true;

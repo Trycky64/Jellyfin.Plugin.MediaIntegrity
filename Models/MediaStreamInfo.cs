@@ -43,4 +43,14 @@ public sealed class MediaStreamInfo
     public int? Channels { get; set; }
 
     public string Language { get; set; } = string.Empty;
+
+    public string Title { get; set; } = string.Empty;
+
+    public bool IsDefault { get; set; }
+
+    public bool IsForced { get; set; }
+
+    public bool IsCommentary { get; set; }
+
+    public bool IsAudioDescription { get; set; }
 }

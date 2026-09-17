@@ -79,6 +79,7 @@ public sealed class MediaIntegrityScanTask : IScheduledTask
 
         var summary =
             queue.Summary;
+        var avCounters = new AudioVideoScanCounters();
 
         if (total == 0)
         {
@@ -117,12 +118,25 @@ public sealed class MediaIntegrityScanTask : IScheduledTask
                     await _mediaProbeService.ProbeAsync(
                         path,
                         configuration.ProbeTimeoutSeconds,
-                        cancellationToken);
+                        cancellationToken,
+                        configuration.EnableAudioVideoSyncCheck);
+
+                if (configuration.EnableAudioVideoSyncCheck && configuration.EnablePacketTimelineAnalysis)
+                {
+                    var packetIssues = await PacketTimelineAnalyzer.AnalyzeAsync(
+                        path, probeResult.ScanResult, configuration.ProbeTimeoutSeconds, cancellationToken);
+                    probeResult.ScanResult.Issues.AddRange(packetIssues);
+                    if (packetIssues.Count > 0 && probeResult.ScanResult.Status == MediaIntegrityStatus.Ok)
+                    {
+                        probeResult.ScanResult.Status = MediaIntegrityStatus.Warning;
+                    }
+                }
 
                 ProcessScanResult(
                     probeResult.ScanResult,
                     summary,
-                    queue);
+                    queue,
+                    avCounters);
 
                 LogScanResult(
                     probeResult.ScanResult);
@@ -173,7 +187,7 @@ public sealed class MediaIntegrityScanTask : IScheduledTask
             queue,
             cancellationToken);
 
-        await _statistics.SaveAsync(LastScanStats.FromQueue(queue), cancellationToken);
+        await _statistics.SaveAsync(LastScanStats.FromQueue(queue, avCounters), cancellationToken);
 
         progress.Report(100);
 
@@ -197,9 +211,11 @@ public sealed class MediaIntegrityScanTask : IScheduledTask
     private static void ProcessScanResult(
         MediaScanResult scanResult,
         RepairQueueSummary summary,
-        RepairQueue queue)
+        RepairQueue queue,
+        AudioVideoScanCounters avCounters)
     {
         summary.Checked++;
+        avCounters.Add(scanResult);
 
         switch (scanResult.Status)
         {
@@ -257,7 +273,24 @@ public sealed class MediaIntegrityScanTask : IScheduledTask
                         Code = issue.Code,
                         Message = issue.Message,
                         Severity = issue.Severity,
-                        RawMessage = issue.RawMessage
+                        RawMessage = issue.RawMessage,
+                        VideoStreamIndex = issue.VideoStreamIndex,
+                        AudioStreamIndex = issue.AudioStreamIndex,
+                        StartDeltaSeconds = issue.StartDeltaSeconds,
+                        DurationDeltaSeconds = issue.DurationDeltaSeconds,
+                        EndDeltaSeconds = issue.EndDeltaSeconds,
+                        AudioVideoDurationRatio = issue.AudioVideoDurationRatio,
+                        AudioLanguage = issue.AudioLanguage,
+                        AudioTitle = issue.AudioTitle,
+                        AudioIsDefault = issue.AudioIsDefault,
+                        AudioIsForced = issue.AudioIsForced,
+                        AudioIsCommentary = issue.AudioIsCommentary,
+                        AudioIsDescription = issue.AudioIsDescription,
+                        VideoStartTimeSeconds = issue.VideoStartTimeSeconds,
+                        AudioStartTimeSeconds = issue.AudioStartTimeSeconds,
+                        VideoDurationSeconds = issue.VideoDurationSeconds,
+                        AudioDurationSeconds = issue.AudioDurationSeconds,
+                        OffsetEvolutionSeconds = issue.OffsetEvolutionSeconds
                     })
                 .ToList(),
             Status = RepairQueueItemStatus.Pending,
@@ -316,5 +349,16 @@ public sealed class MediaIntegrityScanTask : IScheduledTask
             scanResult.Status,
             scanResult.Path,
             issueCodes);
+
+        foreach (var issue in scanResult.Issues.Where(
+            static issue => issue.Code.StartsWith("AudioVideo", StringComparison.Ordinal)))
+        {
+            _logger.LogWarning(
+                "[MediaIntegrity] [Scan] {Code}: video={VideoStream} audio={AudioStream} "
+                + "startDelta={StartDelta} durationDelta={DurationDelta} endDelta={EndDelta} severity={Severity}.",
+                issue.Code, issue.VideoStreamIndex, issue.AudioStreamIndex,
+                issue.StartDeltaSeconds, issue.DurationDeltaSeconds, issue.EndDeltaSeconds,
+                issue.Severity);
+        }
     }
 }

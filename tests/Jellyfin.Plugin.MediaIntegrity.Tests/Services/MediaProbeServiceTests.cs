@@ -96,6 +96,71 @@ public sealed class MediaProbeServiceTests
         Assert.Equal(2.021, Assert.Single(result.Streams).DurationSeconds);
     }
 
+    [Fact]
+    public void ProbeOutput_ParsesAudioTagsAndDispositions()
+    {
+        var result = Parse("""
+            {
+              "streams": [{
+                "index": 2, "codec_type": "audio", "codec_name": "aac",
+                "tags": { "language": "fra", "title": "Commentary" },
+                "disposition": {
+                  "default": 1, "forced": 1, "comment": 1,
+                  "visual_impaired": 1, "descriptions": 0
+                }
+              }]
+            }
+            """);
+        var stream = Assert.Single(result.Streams);
+        Assert.Equal("fra", stream.Language);
+        Assert.Equal("Commentary", stream.Title);
+        Assert.True(stream.IsDefault);
+        Assert.True(stream.IsForced);
+        Assert.True(stream.IsCommentary);
+        Assert.True(stream.IsAudioDescription);
+    }
+
+    [Fact]
+    public void ProbeOutput_HandlesAbsentAndFalseDispositions()
+    {
+        var result = Parse("""
+            {
+              "streams": [
+                {"index":0,"codec_type":"audio","codec_name":"aac"},
+                {"index":1,"codec_type":"audio","codec_name":"aac",
+                 "tags":{"language":"N/A"},
+                 "disposition":{"default":0,"forced":0,"comment":0,"descriptions":0}}
+              ]
+            }
+            """);
+        Assert.All(result.Streams, stream =>
+        {
+            Assert.False(stream.IsDefault);
+            Assert.False(stream.IsForced);
+            Assert.False(stream.IsCommentary);
+            Assert.False(stream.IsAudioDescription);
+            Assert.Empty(stream.Title);
+        });
+        Assert.Empty(result.Streams[1].Language);
+    }
+
+    [Fact]
+    public void ProbeOutput_ParsesMixedCaseTagsAndNumericStringDisposition()
+    {
+        var result = Parse("""
+            {"streams":[{"index":0,"codec_type":"audio","codec_name":"aac",
+              "tags":{"LANGUAGE":"enG","TITLE":"Narration","duration":"00:00:01.500000000"},
+              "disposition":{"default":"1","forced":"0","comment":"N/A"}}]}
+            """);
+        var stream = Assert.Single(result.Streams);
+        Assert.Equal("enG", stream.Language);
+        Assert.Equal("Narration", stream.Title);
+        Assert.Equal(1.5, stream.DurationSeconds);
+        Assert.True(stream.IsDefault);
+        Assert.False(stream.IsForced);
+        Assert.False(stream.IsCommentary);
+    }
+
     private static MediaScanResult Parse(string output)
     {
         var method = typeof(MediaProbeService).GetMethod(
@@ -107,5 +172,3 @@ public sealed class MediaProbeServiceTests
             ["/media/test.mp4", output, 0])!;
     }
 }
-
-

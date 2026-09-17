@@ -28,7 +28,8 @@ public sealed class MediaProbeService
     public async Task<MediaProbeResult> ProbeAsync(
         string path,
         int timeoutSeconds,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool enableAudioVideoSyncCheck = true)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
@@ -123,6 +124,16 @@ public sealed class MediaProbeService
             scanResult,
             stderr,
             process.ExitCode);
+
+        foreach (var issue in enableAudioVideoSyncCheck ? AudioVideoTimelineAnalyzer.Analyze(scanResult) : [])
+        {
+            scanResult.Issues.Add(issue);
+            if (scanResult.Status == MediaIntegrityStatus.Ok
+                && issue.Severity == MediaIssueSeverity.Warning)
+            {
+                scanResult.Status = MediaIntegrityStatus.Warning;
+            }
+        }
 
         return new MediaProbeResult
         {
@@ -222,7 +233,7 @@ public sealed class MediaProbeService
                 durationString,
                 NumberStyles.Float,
                 CultureInfo.InvariantCulture,
-                out var duration))
+                out var duration) && double.IsFinite(duration))
         {
             result.DurationSeconds =
                 duration;
@@ -425,21 +436,43 @@ public sealed class MediaProbeService
                 sampleRateValue;
         }
 
-        if (stream.TryGetProperty(
-                "tags",
-                out var tags)
-            && tags.ValueKind
-                == JsonValueKind.Object
-            && tags.TryGetProperty(
-                "language",
-                out var language))
+        if (stream.TryGetProperty("tags", out var tags)
+            && tags.ValueKind == JsonValueKind.Object)
         {
-            result.Language =
-                language.GetString()
-                ?? string.Empty;
+            result.Language = GetTag(tags, "language");
+            result.Title = GetTag(tags, "title");
+        }
+
+        if (stream.TryGetProperty("disposition", out var disposition)
+            && disposition.ValueKind == JsonValueKind.Object)
+        {
+            result.IsDefault = GetDisposition(disposition, "default");
+            result.IsForced = GetDisposition(disposition, "forced");
+            result.IsCommentary = GetDisposition(disposition, "comment");
+            result.IsAudioDescription = GetDisposition(disposition, "visual_impaired")
+                || GetDisposition(disposition, "descriptions");
         }
 
         return result;
+    }
+
+    private static bool GetDisposition(JsonElement disposition, string name) =>
+        disposition.TryGetProperty(name, out var value)
+        && ((value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number) && number != 0)
+            || (value.ValueKind == JsonValueKind.String
+                && (value.GetString() == "1" || bool.TryParse(value.GetString(), out var parsed) && parsed)));
+
+    private static string GetTag(JsonElement tags, string name)
+    {
+        foreach (var tag in tags.EnumerateObject())
+        {
+            if (!string.Equals(tag.Name, name, StringComparison.OrdinalIgnoreCase)) continue;
+            var value = tag.Value.ValueKind == JsonValueKind.String ? tag.Value.GetString() : null;
+            return value is null || string.Equals(value, "N/A", StringComparison.OrdinalIgnoreCase)
+                ? string.Empty : value;
+        }
+
+        return string.Empty;
     }
 
     private static double? ParseDoubleStringProperty(
@@ -455,7 +488,7 @@ public sealed class MediaProbeService
                 value,
                 NumberStyles.Float,
                 CultureInfo.InvariantCulture,
-                out var parsed))
+                out var parsed) && double.IsFinite(parsed))
         {
             return parsed;
         }
@@ -475,19 +508,23 @@ public sealed class MediaProbeService
         // stream.duration. It is still a per-stream value and avoids falling
         // back to the container duration.
         if (!stream.TryGetProperty("tags", out var tags)
-            || tags.ValueKind != JsonValueKind.Object
-            || !tags.TryGetProperty("DURATION", out var durationTag)
-            || durationTag.ValueKind != JsonValueKind.String)
+            || tags.ValueKind != JsonValueKind.Object)
         {
             return null;
         }
 
-        return TimeSpan.TryParse(
-            durationTag.GetString(),
-            CultureInfo.InvariantCulture,
-            out var duration)
-            ? duration.TotalSeconds
-            : null;
+        var parts = GetTag(tags, "DURATION").Split(':');
+        if (parts.Length != 3
+            || !int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out var hours)
+            || !int.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out var minutes)
+            || !double.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds)
+            || hours < 0 || minutes is < 0 or >= 60 || seconds is < 0 or >= 60)
+        {
+            return null;
+        }
+
+        var duration = hours * 3600d + minutes * 60d + seconds;
+        return double.IsFinite(duration) ? duration : null;
     }
 
     private static string GetString(

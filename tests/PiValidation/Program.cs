@@ -9,6 +9,34 @@ using Microsoft.Extensions.Logging.Abstractions;
 var detector = new MediaIssueDetector();
 var probe = new MediaProbeService(NullLogger<MediaProbeService>.Instance, detector);
 var report = new Dictionary<string, object>();
+if (args.Length == 2 && args[0] == "--packet-control")
+{
+    var scan = new Jellyfin.Plugin.MediaIntegrity.Models.MediaScanResult { DurationSeconds = 4 };
+    var outcomes = new Dictionary<string, bool>();
+    try
+    {
+        await PacketTimelineAnalyzer.AnalyzeAsync(args[1], scan, 1, CancellationToken.None);
+        outcomes["timeout"] = false;
+    }
+    catch (TimeoutException) { outcomes["timeout"] = true; }
+    using var cancellation = new CancellationTokenSource(250);
+    try
+    {
+        await PacketTimelineAnalyzer.AnalyzeAsync(args[1], scan, 60, cancellation.Token);
+        outcomes["cancellation"] = false;
+    }
+    catch (OperationCanceledException) { outcomes["cancellation"] = true; }
+    Console.WriteLine(JsonSerializer.Serialize(outcomes));
+    return;
+}
+if (args.Length == 2 && args[0] == "--packets")
+{
+    var source = await probe.ProbeAsync(args[1], 120, CancellationToken.None);
+    var issues = await PacketTimelineAnalyzer.AnalyzeAsync(args[1], source.ScanResult, 120, CancellationToken.None);
+    Console.WriteLine(JsonSerializer.Serialize(new { source.ScanResult.Streams, Issues = issues }));
+    return;
+}
+
 if (args.Length == 3 && args[0] == "--compare")
 {
     var source = await probe.ProbeAsync(args[1], 120, CancellationToken.None);

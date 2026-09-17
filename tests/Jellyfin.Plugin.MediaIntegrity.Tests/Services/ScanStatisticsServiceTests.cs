@@ -36,7 +36,7 @@ public sealed class ScanStatisticsServiceTests : IDisposable
         await CreateService().SaveAsync(expected, CancellationToken.None);
         queue.Files.Clear();
         queue.Summary.Checked = 0;
-        Assert.Equal(expected, await CreateService().LoadAsync(CancellationToken.None));
+        Assert.Equivalent(expected, await CreateService().LoadAsync(CancellationToken.None));
         Assert.Equal(1, expected.Queued);
         Assert.Equal(4, expected.Checked);
     }
@@ -49,8 +49,47 @@ public sealed class ScanStatisticsServiceTests : IDisposable
         await service.SaveAsync(expected, CancellationToken.None);
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             service.SaveAsync(new LastScanStats { Checked = 99 }, new CancellationToken(true)));
-        Assert.Equal(expected, await service.LoadAsync(CancellationToken.None));
+        Assert.Equivalent(expected, await service.LoadAsync(CancellationToken.None));
         Assert.Single(Directory.GetFiles(_root, "*", SearchOption.AllDirectories));
+    }
+
+    [Fact]
+    public async Task LegacyJson_LoadsWithZeroAudioVideoStatistics()
+    {
+        var path = Path.Combine(_root, "media-integrity", "last-scan.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        await File.WriteAllTextAsync(path, "{\"checked\":3,\"healthy\":2}");
+        var stats = (await CreateService().LoadAsync(CancellationToken.None))!;
+        Assert.Equal(3, stats.Checked);
+        Assert.Equal(0, stats.AudioVideoAffectedMedia);
+        Assert.Empty(stats.AudioVideoDiagnostics);
+    }
+
+    [Fact]
+    public async Task AudioVideoDiagnostics_RoundTripWithStatistics()
+    {
+        var counters = new AudioVideoScanCounters();
+        counters.Add(new MediaScanResult
+        {
+            Path = "/media/fixture.mp4",
+            Issues = [new MediaIssue
+            {
+                Code = "AudioVideoDurationMismatch",
+                Severity = MediaIssueSeverity.Warning,
+                VideoStreamIndex = 0,
+                AudioStreamIndex = 2,
+                DurationDeltaSeconds = -1.428867
+            }]
+        });
+        var expected = LastScanStats.FromQueue(RepairQueueService.CreateEmpty(), counters);
+        await CreateService().SaveAsync(expected, CancellationToken.None);
+        var loaded = (await CreateService().LoadAsync(CancellationToken.None))!;
+        Assert.Equal(1, loaded.AudioVideoAffectedMedia);
+        Assert.Equal(1, loaded.AudioVideoDurationMismatches);
+        var diagnostic = Assert.Single(loaded.AudioVideoDiagnostics);
+        Assert.Equal("fixture.mp4", diagnostic.FileName);
+        Assert.Equal(2, diagnostic.AudioStreamIndex);
+        Assert.Equal(-1.428867, diagnostic.DurationDeltaSeconds);
     }
 
     public void Dispose()

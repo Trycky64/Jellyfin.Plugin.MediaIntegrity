@@ -28,6 +28,11 @@ public sealed class PluginConfiguration : BasePluginConfiguration
 
     public bool ValidateFullPacketPass { get; set; } = true;
 
+    /// <summary>Enables bounded first/last packet PTS analysis during source scans.</summary>
+    public bool EnableAudioVideoSyncCheck { get; set; } = true;
+
+    public bool EnablePacketTimelineAnalysis { get; set; } = false;
+
     /// <summary>
     /// Legacy compatibility setting. Backups are always retained; there is no
     /// automatic cleanup in these releases, even when this value is false.

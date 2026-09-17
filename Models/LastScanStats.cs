@@ -19,7 +19,15 @@ public sealed record LastScanStats
 
     public int Corrupted { get; init; }
 
-    public static LastScanStats FromQueue(RepairQueue queue) => new()
+    public int AudioVideoAffectedMedia { get; init; }
+    public int AudioVideoStartOffsets { get; init; }
+    public int AudioVideoDurationMismatches { get; init; }
+    public int AudioVideoEndMismatches { get; init; }
+    public int AudioVideoSuspectedDrifts { get; init; }
+    public int TimelineDataIncomplete { get; init; }
+    public List<AudioVideoScanDiagnostic> AudioVideoDiagnostics { get; init; } = [];
+
+    public static LastScanStats FromQueue(RepairQueue queue, AudioVideoScanCounters? av = null) => new()
     {
         LastScanDate = queue.GeneratedAt,
         Checked = queue.Summary.Checked,
@@ -27,6 +35,13 @@ public sealed record LastScanStats
         Warnings = queue.Summary.Warning,
         Queued = queue.Files.Count,
         Unreadable = queue.Summary.Unreadable,
-        Corrupted = queue.Summary.Corrupted
+        Corrupted = queue.Summary.Corrupted,
+        AudioVideoAffectedMedia = av?.AffectedMedia ?? 0,
+        AudioVideoStartOffsets = av?.StartOffsets ?? 0,
+        AudioVideoDurationMismatches = av?.DurationMismatches ?? 0,
+        AudioVideoEndMismatches = av?.EndMismatches ?? 0,
+        AudioVideoSuspectedDrifts = av?.SuspectedDrifts ?? 0,
+        TimelineDataIncomplete = av?.IncompleteTimelineData ?? 0,
+        AudioVideoDiagnostics = av?.Diagnostics.ToList() ?? []
     };
 }

@@ -1,0 +1,30 @@
+{
+  "LastScanDate": "2026-09-18T12:00:00Z",
+  "Checked": 129,
+  "Healthy": 122,
+  "Warnings": 7,
+  "Queued": 0,
+  "Unreadable": 0,
+  "Corrupted": 0,
+  "AudioVideoAffectedMedia": 1,
+  "AudioVideoStartOffsets": 0,
+  "AudioVideoDurationMismatches": 1,
+  "AudioVideoEndMismatches": 1,
+  "AudioVideoSuspectedDrifts": 1,
+  "TimelineDataIncomplete": 0,
+  "AudioVideoDiagnostics": [
+    {
+      "FileName": "fixture.mp4",
+      "Code": "AudioVideoDurationMismatch",
+      "VideoStreamIndex": 0,
+      "AudioStreamIndex": 2,
+      "AudioLanguage": "fra",
+      "AudioTitle": "Commentary",
+      "AudioIsDefault": false,
+      "AudioVideoDurationRatio": 0.998999,
+      "StartDeltaSeconds": 0,
+      "DurationDeltaSeconds": -1.428867,
+      "EndDeltaSeconds": -1.428867
+    }
+  ]
+}
