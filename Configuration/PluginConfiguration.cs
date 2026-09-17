@@ -47,4 +47,17 @@ public sealed class PluginConfiguration : BasePluginConfiguration
     public int ValidationTimeoutSeconds { get; set; } = 3600;
 
     public double DurationToleranceSeconds { get; set; } = 2.0;
+
+    /// <summary>
+    /// Maximum permitted source-to-candidate duration change for each audio
+    /// or video stream. This is intentionally independent from container
+    /// duration tolerance.
+    /// </summary>
+    public double StreamDurationToleranceSeconds { get; set; } = 0.05;
+
+    /// <summary>
+    /// Maximum permitted source-to-candidate start timestamp change for each
+    /// audio or video stream.
+    /// </summary>
+    public double StreamStartTimeToleranceSeconds { get; set; } = 0.01;
 }

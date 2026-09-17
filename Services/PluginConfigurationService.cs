@@ -95,6 +95,14 @@ public sealed class PluginConfigurationService
                 "DurationToleranceSeconds must be finite and non-negative.");
         }
 
+        ValidateNonNegativeFinite(
+            configuration.StreamDurationToleranceSeconds,
+            nameof(configuration.StreamDurationToleranceSeconds));
+
+        ValidateNonNegativeFinite(
+            configuration.StreamStartTimeToleranceSeconds,
+            nameof(configuration.StreamStartTimeToleranceSeconds));
+
         ValidateAbsolutePath(
             configuration.SourceRoot,
             nameof(configuration.SourceRoot));
@@ -180,6 +188,18 @@ public sealed class PluginConfigurationService
         {
             throw new InvalidOperationException(
                 $"{propertyName} must be an absolute path.");
+        }
+    }
+
+    private static void ValidateNonNegativeFinite(
+        double value,
+        string propertyName)
+    {
+        if (!double.IsFinite(value)
+            || value < 0)
+        {
+            throw new InvalidOperationException(
+                $"{propertyName} must be finite and non-negative.");
         }
     }
 

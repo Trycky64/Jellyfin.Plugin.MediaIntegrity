@@ -47,6 +47,46 @@
                 <div class="inputContainer">
                     <label
                         class="inputLabel inputLabelUnfocused"
+                        for="StreamDurationToleranceSeconds">
+                        Stream duration tolerance
+                    </label>
+
+                    <input
+                        id="StreamDurationToleranceSeconds"
+                        type="number"
+                        min="0"
+                        step="0.001"
+                        is="emby-input" />
+
+                    <div class="fieldDescription">
+                        Maximum accepted duration change per audio or video stream,
+                        in seconds. This protects stream-copy timeline integrity.
+                    </div>
+                </div>
+
+                <div class="inputContainer">
+                    <label
+                        class="inputLabel inputLabelUnfocused"
+                        for="StreamStartTimeToleranceSeconds">
+                        Stream start-time tolerance
+                    </label>
+
+                    <input
+                        id="StreamStartTimeToleranceSeconds"
+                        type="number"
+                        min="0"
+                        step="0.001"
+                        is="emby-input" />
+
+                    <div class="fieldDescription">
+                        Maximum accepted start-time change per audio or video stream,
+                        in seconds.
+                    </div>
+                </div>
+
+                <div class="inputContainer">
+                    <label
+                        class="inputLabel inputLabelUnfocused"
                         for="MaxRepairsPerRun">
                         Maximum repairs per run
                     </label>
@@ -497,6 +537,14 @@
                             'DurationToleranceSeconds',
                             config.DurationToleranceSeconds);
 
+                        setValue(
+                            'StreamDurationToleranceSeconds',
+                            config.StreamDurationToleranceSeconds);
+
+                        setValue(
+                            'StreamStartTimeToleranceSeconds',
+                            config.StreamStartTimeToleranceSeconds);
+
                         Dashboard.hideLoadingMsg();
                     })
                     .catch(function (error) {
@@ -531,15 +579,22 @@
                     }
                 }
 
-                const tolerance =
-                    getNumber('DurationToleranceSeconds');
+                const toleranceFields = [
+                    'DurationToleranceSeconds',
+                    'StreamDurationToleranceSeconds',
+                    'StreamStartTimeToleranceSeconds'
+                ];
 
-                if (!Number.isFinite(tolerance)
-                    || tolerance < 0) {
-                    window.alert(
-                        'DurationToleranceSeconds cannot be negative.');
+                for (const id of toleranceFields) {
+                    const tolerance = getNumber(id);
 
-                    return false;
+                    if (!Number.isFinite(tolerance)
+                        || tolerance < 0) {
+                        window.alert(
+                            id + ' must be a non-negative finite number.');
+
+                        return false;
+                    }
                 }
 
                 const pathFields = [
@@ -662,6 +717,12 @@
 
                         config.DurationToleranceSeconds =
                             getNumber('DurationToleranceSeconds');
+
+                        config.StreamDurationToleranceSeconds =
+                            getNumber('StreamDurationToleranceSeconds');
+
+                        config.StreamStartTimeToleranceSeconds =
+                            getNumber('StreamStartTimeToleranceSeconds');
 
                         return ApiClient
                             .updatePluginConfiguration(

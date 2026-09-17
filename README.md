@@ -2,12 +2,12 @@
 
 Detect container and stream issues in a Jellyfin library and repair eligible files with lossless FFmpeg stream copy.
 
-Current release line: v1.0.0. Real remux is fully supported as an explicit opt-in; safe defaults remain unchanged.
+Current release line: v1.0.1. Real remux is fully supported as an explicit opt-in; safe defaults remain unchanged.
 
 ## Features
 
 - **Media Integrity Scan**: inspect supported library files with ffprobe, classify Healthy / Warning / RemuxRecommended / Corrupted / Unreadable, and persist a repair queue.
-- **Media Remux Repair**: remux every stream with `-map 0 -c copy`, validate streams, codecs, chapters, duration and a full packet-copy pass, then optionally replace through the writable mirror.
+- **Media Remux Repair**: remux every stream with `-map 0 -c copy`, validate stream identity, per-stream timeline, chapters and a full packet-copy pass, then optionally replace through the writable mirror.
 - Dry-run enabled by default; at most one real repair per task run.
 - Transactional backups, SHA-256 recovery manifests, collision-safe names and rollback on detected replacement failure.
 - Playback checks before remux, before replacement preparation and immediately before the final swap.
@@ -68,6 +68,8 @@ Never make `/media` writable. Create the backup and cache directories before sta
 | MaxRepairAttempts | 3 | Automatic retry cap; see retry rules below |
 | RemuxTimeoutSeconds / ValidationTimeoutSeconds | 3600 / 3600 | Process timeouts |
 | DurationToleranceSeconds | 2 | Maximum source/output duration difference |
+| StreamDurationToleranceSeconds | 0.05 | Maximum source-to-candidate duration change for each audio/video stream |
+| StreamStartTimeToleranceSeconds | 0.01 | Maximum source-to-candidate start-time change for each audio/video stream |
 
 Supported video extensions: MP4, M4V, MKV, WebM, MOV, AVI, TS, M2TS, MTS, MPG, MPEG.
 Supported audio extensions: M4A, MP3, FLAC, OGG, OPUS, AAC. Extension support does not guarantee that every codec/container combination can be remuxed.
@@ -83,6 +85,12 @@ Warnings alone do not enter the repair queue. Unreadable files never enter it. S
 Start with a scan, inspect logs and run **Media Remux Repair** with DryRun=true. Dry-run still performs remux and validation in cache, but never replaces originals and does not consume attempts. Pending items remain pending.
 
 Real repair is opt-in: disable DryRun deliberately, keep MaxRepairsPerRun=1, run the task, inspect its result, then restore DryRun=true. The plugin does not expose encoder arguments or codec conversion. All FFmpeg invocations use `-c copy`. Media reported as playing is deferred. A final playback check after backup/staging prevents replacement if a session starts during preparation. The writable mirror must exist and its SHA-256 must still match the backed-up source; a wrong mount or changed file aborts the swap.
+
+### Timeline safety in v1.0.1
+
+Stream copy can rebuild timestamps in a damaged container without changing any codec. Before a candidate can replace media, Media Integrity now compares source and candidate by stream index and order. For every video and audio stream it verifies codec identity, `time_base`, `start_time`, and `duration`; it also compares every video/audio duration relationship. A candidate is rejected when it changes a stream duration by more than 0.05 seconds, changes a stream start time by more than 0.01 seconds, introduces material A/V duration drift, or has unknown audio/video timing that cannot be verified. These conservative checks are separate from the legacy 2-second container-duration tolerance.
+
+The plugin does not use `atempo`, `asetpts`, resampling, or any encoder to work around a rejected candidate. A rejected timeline is preserved in the queue error with a reason such as `StreamDurationChanged`, `StreamStartTimeChanged`, or `AudioVideoDriftIntroduced`; deterministic timing failures do not consume repeated automatic retries.
 
 Since v0.2, failed entries with a consumed attempt are retried on later task runs until MaxRepairAttempts. Rejected paths with zero attempts are excluded. Entries left Processing after an abrupt crash require manual inspection of the backup manifest and current media before retry; the outcome may be ambiguous. A new scan generates a fresh queue, so do not use repeated scans to bypass the attempt cap.
 
@@ -106,7 +114,7 @@ The plugin attempts rollback from the verified backup after a detected post-swap
 - Source, cache, repair and backup paths are checked against configured roots.
 - Path traversal and symbolic links/reparse points are rejected; destinations are revalidated before the swap.
 - Source library mounts remain read-only; media changes use only the repair mirror.
-- All streams are mapped; codec, stream count, resolution/audio parameters, chapters and duration are compared before replacement.
+- All streams are mapped; codec, order, stream count, resolution/audio parameters, chapters, stream timeline and A/V duration relationships are compared before replacement and again after the final swap.
 - Statistics API requires Jellyfin administrator authorization.
 - Never edit the queue with untrusted paths, relax directory permissions, or allow untrusted users to mutate repair/cache roots while tasks run.
 
@@ -118,6 +126,7 @@ The plugin attempts rollback from the verified backup after a detected post-swap
 - No automatic backup cleanup; monitor free disk space.
 - Current scan is sequential; changing MaxParallelProbes does not speed it up.
 - Preservation of all metadata/attachments depends on FFmpeg container support; validation fails closed on detected incompatibility.
+- Some valid files lack stream-level timing. The repair pipeline refuses their automatic replacement rather than assuming the timing is preserved.
 - UI JavaScript and live API were tested; visual browser inspection was unavailable in the validation session.
 
 ## Troubleshooting

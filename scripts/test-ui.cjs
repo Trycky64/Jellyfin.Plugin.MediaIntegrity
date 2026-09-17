@@ -18,6 +18,7 @@ const config = {
     EnableVideoFiles: true, EnableAudioFiles: true, ProbeTimeoutSeconds: 120,
     MaxParallelProbes: 1, MaxRepairAttempts: 3, RemuxTimeoutSeconds: 3600,
     ValidationTimeoutSeconds: 3600, DurationToleranceSeconds: 2,
+    StreamDurationToleranceSeconds: 0.05, StreamStartTimeToleranceSeconds: 0.01,
     KeepBackups: false, ValidateFullPacketPass: true, PreserveOriginalContainer: true,
     AllowRepairOfCorrupted: false
 };
@@ -51,5 +52,7 @@ vm.runInNewContext(html.match(/<script[^>]*>([\s\S]*?)<\/script>/)[1], context);
     assert.equal(saved.KeepBackups, true);
     assert.equal(saved.DryRun, true);
     assert.equal(saved.MaxRepairsPerRun, 1);
+    assert.equal(saved.StreamDurationToleranceSeconds, 0.05);
+    assert.equal(saved.StreamStartTimeToleranceSeconds, 0.01);
     console.log('PASS: served page statistics, configuration loading and save handler; no JavaScript errors.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

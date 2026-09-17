@@ -13,17 +13,20 @@ public sealed class MediaReplacementService
     private readonly PluginConfigurationService _configurationService;
     private readonly PathMapper _pathMapper;
     private readonly PathSecurityService _pathSecurityService;
+    private readonly IMediaValidationService _mediaValidationService;
     private readonly ILogger<MediaReplacementService> _logger;
 
     public MediaReplacementService(
         PluginConfigurationService configurationService,
         PathMapper pathMapper,
         PathSecurityService pathSecurityService,
+        IMediaValidationService mediaValidationService,
         ILogger<MediaReplacementService> logger)
     {
         _configurationService = configurationService;
         _pathMapper = pathMapper;
         _pathSecurityService = pathSecurityService;
+        _mediaValidationService = mediaValidationService;
         _logger = logger;
     }
 
@@ -279,6 +282,19 @@ public sealed class MediaReplacementService
                     overwrite: true);
 
                 replacementCompleted = true;
+
+                var finalValidation =
+                    await _mediaValidationService.ValidateAsync(
+                        source,
+                        paths.RepairPath,
+                        cancellationToken);
+
+                if (!finalValidation.Success)
+                {
+                    throw new IOException(
+                        "Post-replacement validation failed: "
+                        + string.Join(" | ", finalValidation.Errors));
+                }
             }
             finally
             {

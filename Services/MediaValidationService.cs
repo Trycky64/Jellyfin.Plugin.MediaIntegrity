@@ -7,7 +7,7 @@ namespace Jellyfin.Plugin.MediaIntegrity.Services;
 /// <summary>
 /// Validates remuxed media before it can replace the original file.
 /// </summary>
-public sealed class MediaValidationService
+public sealed class MediaValidationService : IMediaValidationService
 {
     private readonly PluginConfigurationService _configurationService;
     private readonly MediaProbeService _mediaProbeService;
@@ -100,6 +100,34 @@ public sealed class MediaValidationService
             outputProbe.ScanResult,
             errors);
 
+        var timelineIssues =
+            StreamTimelineValidator.Validate(
+                sourceProbe.ScanResult,
+                outputProbe.ScanResult,
+                configuration);
+
+        foreach (var timelineIssue in timelineIssues)
+        {
+            errors.Add(
+                $"{timelineIssue.Code}: {timelineIssue.Message}");
+
+            if (timelineIssue.Code
+                == "AudioVideoDriftIntroduced")
+            {
+                _logger.LogWarning(
+                    "Audio/video timeline drift introduced for {OutputPath}: {Message}",
+                    outputPath,
+                    timelineIssue.Message);
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "Stream timeline validation failed for {OutputPath}: {Message}",
+                    outputPath,
+                    timelineIssue.Message);
+            }
+        }
+
         CompareDuration(
             sourceProbe.ScanResult,
             outputProbe.ScanResult,
@@ -167,6 +195,7 @@ public sealed class MediaValidationService
             SourcePath = sourcePath,
             OutputPath = outputPath,
             Errors = errors,
+            TimelineIssues = timelineIssues.ToList(),
             SourceScan = sourceProbe.ScanResult,
             OutputScan = outputProbe.ScanResult,
             PacketValidationExitCode =
@@ -201,6 +230,14 @@ public sealed class MediaValidationService
 
             var outputStream =
                 output.Streams[index];
+
+            if (sourceStream.Index
+                != outputStream.Index)
+            {
+                errors.Add(
+                    $"Stream order/index mismatch at position {index}: "
+                    + $"source={sourceStream.Index}, output={outputStream.Index}.");
+            }
 
             if (!string.Equals(
                     sourceStream.CodecType,

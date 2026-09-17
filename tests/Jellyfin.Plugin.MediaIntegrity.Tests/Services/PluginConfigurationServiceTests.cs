@@ -17,6 +17,22 @@ public sealed class PluginConfigurationServiceTests
         Assert.Throws<InvalidOperationException>(() => service.Validate(new PluginConfiguration { DurationToleranceSeconds = value }));
     }
 
+    [Theory]
+    [InlineData(nameof(PluginConfiguration.StreamDurationToleranceSeconds))]
+    [InlineData(nameof(PluginConfiguration.StreamStartTimeToleranceSeconds))]
+    public void NonFiniteTimelineTolerance_IsRejected(string propertyName)
+    {
+        var configuration = new PluginConfiguration();
+        typeof(PluginConfiguration).GetProperty(propertyName)!
+            .SetValue(configuration, double.NaN);
+
+        var service = new PluginConfigurationService(
+            NullLogger<PluginConfigurationService>.Instance);
+
+        Assert.Throws<InvalidOperationException>(
+            () => service.Validate(configuration));
+    }
+
     [Fact]
     public void Defaults_AreConservative()
     {
@@ -30,5 +46,7 @@ public sealed class PluginConfigurationServiceTests
         Assert.Equal("/repair-media", configuration.RepairRoot);
         Assert.Equal("/repair-backups", configuration.BackupRoot);
         Assert.Equal("/cache/media-integrity", configuration.TempRoot);
+        Assert.Equal(0.05, configuration.StreamDurationToleranceSeconds);
+        Assert.Equal(0.01, configuration.StreamStartTimeToleranceSeconds);
     }
 }

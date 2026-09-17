@@ -13,6 +13,11 @@ public sealed class MediaValidationResult
 
     public List<string> Errors { get; init; } = [];
 
+    /// <summary>
+    /// Structured timeline failures in addition to the user-visible errors.
+    /// </summary>
+    public List<TimelineValidationIssue> TimelineIssues { get; init; } = [];
+
     public MediaScanResult? SourceScan { get; init; }
 
     public MediaScanResult? OutputScan { get; init; }

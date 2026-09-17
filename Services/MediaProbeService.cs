@@ -347,6 +347,19 @@ public sealed class MediaProbeService
                 stream,
                 "codec_name");
 
+        result.TimeBase =
+            GetString(
+                stream,
+                "time_base");
+
+        result.StartTimeSeconds =
+            ParseDoubleStringProperty(
+                stream,
+                "start_time");
+
+        result.DurationSeconds =
+            ParseStreamDuration(stream);
+
         result.Profile =
             GetString(
                 stream,
@@ -448,6 +461,33 @@ public sealed class MediaProbeService
         }
 
         return null;
+    }
+
+    private static double? ParseStreamDuration(JsonElement stream)
+    {
+        var directDuration = ParseDoubleStringProperty(stream, "duration");
+        if (directDuration is not null)
+        {
+            return directDuration;
+        }
+
+        // Matroska commonly exposes a stream-local DURATION tag instead of
+        // stream.duration. It is still a per-stream value and avoids falling
+        // back to the container duration.
+        if (!stream.TryGetProperty("tags", out var tags)
+            || tags.ValueKind != JsonValueKind.Object
+            || !tags.TryGetProperty("DURATION", out var durationTag)
+            || durationTag.ValueKind != JsonValueKind.String)
+        {
+            return null;
+        }
+
+        return TimeSpan.TryParse(
+            durationTag.GetString(),
+            CultureInfo.InvariantCulture,
+            out var duration)
+            ? duration.TotalSeconds
+            : null;
     }
 
     private static string GetString(

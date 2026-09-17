@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using Jellyfin.Plugin.MediaIntegrity.Models;
 using Jellyfin.Plugin.MediaIntegrity.Services;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -42,7 +43,12 @@ public sealed class MediaReplacementServiceTests : IDisposable
         var configService = new PluginConfigurationService(NullLogger<PluginConfigurationService>.Instance, _configuration);
         var security = new PathSecurityService(NullLogger<PathSecurityService>.Instance);
         var mapper = new PathMapper(configService, security, NullLogger<PathMapper>.Instance);
-        _service = new MediaReplacementService(configService, mapper, security, NullLogger<MediaReplacementService>.Instance);
+        _service = new MediaReplacementService(
+            configService,
+            mapper,
+            security,
+            SucceedingValidationService.Instance,
+            NullLogger<MediaReplacementService>.Instance);
     }
 
     [Fact]
@@ -121,7 +127,12 @@ public sealed class MediaReplacementServiceTests : IDisposable
         var configurationService = new PluginConfigurationService(NullLogger<PluginConfigurationService>.Instance, _configuration);
         var security = new PathSecurityService(NullLogger<PathSecurityService>.Instance);
         var mapper = new PathMapper(configurationService, security, NullLogger<PathMapper>.Instance);
-        var service = new MediaReplacementService(configurationService, mapper, security, new PostSwapFailureLogger());
+        var service = new MediaReplacementService(
+            configurationService,
+            mapper,
+            security,
+            SucceedingValidationService.Instance,
+            new PostSwapFailureLogger());
         var result = await service.ReplaceAsync(_source, _temporary, CancellationToken.None);
         Assert.False(result.Success);
         Assert.True(result.RollbackAttempted);
@@ -144,6 +155,28 @@ public sealed class MediaReplacementServiceTests : IDisposable
                 throw new IOException("Injected post-swap failure to exercise rollback.");
             }
         }
+    }
+
+    [Fact]
+    public async Task Replace_PostSwapTimelineValidationFailureRollsBack()
+    {
+        var configurationService = new PluginConfigurationService(NullLogger<PluginConfigurationService>.Instance, _configuration);
+        var security = new PathSecurityService(NullLogger<PathSecurityService>.Instance);
+        var mapper = new PathMapper(configurationService, security, NullLogger<PathMapper>.Instance);
+        var service = new MediaReplacementService(
+            configurationService,
+            mapper,
+            security,
+            new FailingValidationService(),
+            NullLogger<MediaReplacementService>.Instance);
+
+        var result = await service.ReplaceAsync(_source, _temporary, CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.True(result.RollbackAttempted);
+        Assert.True(result.RollbackSucceeded);
+        Assert.Equal(Hash(_source), Hash(result.RepairPath));
+        Assert.True(File.Exists(result.BackupPath + ".metadata.json"));
     }
 
     [Fact]
@@ -178,6 +211,30 @@ public sealed class MediaReplacementServiceTests : IDisposable
     }
 
     private static string Hash(string path) => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
+
+    private sealed class SucceedingValidationService : IMediaValidationService
+    {
+        public static SucceedingValidationService Instance { get; } = new();
+
+        public Task<MediaValidationResult> ValidateAsync(
+            string sourcePath,
+            string outputPath,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(new MediaValidationResult { Success = true });
+    }
+
+    private sealed class FailingValidationService : IMediaValidationService
+    {
+        public Task<MediaValidationResult> ValidateAsync(
+            string sourcePath,
+            string outputPath,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(new MediaValidationResult
+            {
+                Success = false,
+                Errors = ["StreamDurationChanged: injected post-swap mismatch."]
+            });
+    }
 
     public void Dispose() => Directory.Delete(_root, recursive: true);
 }

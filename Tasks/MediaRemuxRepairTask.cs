@@ -14,7 +14,7 @@ public sealed class MediaRemuxRepairTask : IScheduledTask
     private readonly RepairQueueService _repairQueueService;
     private readonly MediaUseService _mediaUseService;
     private readonly MediaRemuxService _mediaRemuxService;
-    private readonly MediaValidationService _mediaValidationService;
+    private readonly IMediaValidationService _mediaValidationService;
     private readonly MediaReplacementService _mediaReplacementService;
     private readonly PathSecurityService _pathSecurityService;
     private readonly ILogger<MediaRemuxRepairTask> _logger;
@@ -24,7 +24,7 @@ public sealed class MediaRemuxRepairTask : IScheduledTask
         RepairQueueService repairQueueService,
         MediaUseService mediaUseService,
         MediaRemuxService mediaRemuxService,
-        MediaValidationService mediaValidationService,
+        IMediaValidationService mediaValidationService,
         MediaReplacementService mediaReplacementService,
         PathSecurityService pathSecurityService,
         ILogger<MediaRemuxRepairTask> logger)
@@ -406,6 +406,21 @@ public sealed class MediaRemuxRepairTask : IScheduledTask
 
                 item.LastError =
                     ex.Message;
+
+                if (!configuration.DryRun
+                    && RepairRetryPolicy.IsDeterministicTimelineFailure(
+                        item.LastError))
+                {
+                    item.Attempts =
+                        configuration.MaxRepairAttempts;
+
+                    _logger.LogWarning(
+                        "[MediaIntegrity] [Repair] "
+                        + "Timeline validation rejected {Path}; "
+                        + "automatic retries are disabled for this "
+                        + "deterministic failure.",
+                        item.Path);
+                }
 
                 failed++;
 

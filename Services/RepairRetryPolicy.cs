@@ -7,6 +7,31 @@ namespace Jellyfin.Plugin.MediaIntegrity.Services;
 /// </summary>
 public static class RepairRetryPolicy
 {
+    public static bool IsDeterministicTimelineFailure(string error)
+    {
+        return error.Contains(
+                   "StreamDurationChanged:",
+                   StringComparison.Ordinal)
+            || error.Contains(
+                   "StreamStartTimeChanged:",
+                   StringComparison.Ordinal)
+            || error.Contains(
+                   "AudioVideoDriftIntroduced:",
+                   StringComparison.Ordinal)
+            || error.Contains(
+                   "StreamDurationUnknown:",
+                   StringComparison.Ordinal)
+            || error.Contains(
+                   "StreamStartTimeUnknown:",
+                   StringComparison.Ordinal)
+            || error.Contains(
+                   "StreamTimeBaseChanged:",
+                   StringComparison.Ordinal)
+            || error.Contains(
+                   "StreamCodecChanged:",
+                   StringComparison.Ordinal);
+    }
+
     public static bool IsCandidate(RepairQueueItem item, PluginConfiguration configuration)
     {
         if (item.Status == RepairQueueItemStatus.Pending)

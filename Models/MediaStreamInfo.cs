@@ -11,6 +11,21 @@ public sealed class MediaStreamInfo
 
     public string CodecName { get; set; } = string.Empty;
 
+    /// <summary>
+    /// FFmpeg stream clock representation, for example <c>1/90000</c>.
+    /// </summary>
+    public string TimeBase { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Start timestamp reported by ffprobe, in seconds when available.
+    /// </summary>
+    public double? StartTimeSeconds { get; set; }
+
+    /// <summary>
+    /// Stream duration reported by ffprobe, in seconds when available.
+    /// </summary>
+    public double? DurationSeconds { get; set; }
+
     public string Profile { get; set; } = string.Empty;
 
     public int? Width { get; set; }

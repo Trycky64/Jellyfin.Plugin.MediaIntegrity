@@ -9,6 +9,25 @@ using Microsoft.Extensions.Logging.Abstractions;
 var detector = new MediaIssueDetector();
 var probe = new MediaProbeService(NullLogger<MediaProbeService>.Instance, detector);
 var report = new Dictionary<string, object>();
+if (args.Length == 3 && args[0] == "--compare")
+{
+    var source = await probe.ProbeAsync(args[1], 120, CancellationToken.None);
+    var candidate = await probe.ProbeAsync(args[2], 120, CancellationToken.None);
+    var issues = StreamTimelineValidator.Validate(
+        source.ScanResult,
+        candidate.ScanResult,
+        new PluginConfiguration());
+
+    Console.WriteLine(JsonSerializer.Serialize(new
+    {
+        Source = source.ScanResult,
+        Candidate = candidate.ScanResult,
+        TimelineIssues = issues,
+        Accepted = issues.Count == 0
+    }, new JsonSerializerOptions { WriteIndented = true }));
+    return;
+}
+
 if (args.Length > 0)
 {
     foreach (var path in args)

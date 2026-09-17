@@ -32,6 +32,9 @@ public sealed class PluginServiceRegistrator :
         serviceCollection.AddSingleton<MediaUseService>();
         serviceCollection.AddSingleton<MediaRemuxService>();
         serviceCollection.AddSingleton<MediaValidationService>();
+        serviceCollection.AddSingleton<IMediaValidationService>(
+            static provider =>
+                provider.GetRequiredService<MediaValidationService>());
         serviceCollection.AddSingleton<MediaReplacementService>();
 
         serviceCollection.AddSingleton<MediaIntegrityScanTask>();
