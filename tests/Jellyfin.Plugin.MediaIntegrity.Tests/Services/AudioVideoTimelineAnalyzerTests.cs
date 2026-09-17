@@ -88,7 +88,7 @@ public sealed class AudioVideoTimelineAnalyzerTests
     {
         var issues = AudioVideoTimelineAnalyzer.Analyze(Scan(Video(0, 0, videoDuration), Audio(1, 0, audioDuration)));
         Assert.All(issues, issue => Assert.True(issue.AudioVideoDurationRatio is null || double.IsFinite(issue.AudioVideoDurationRatio.Value)));
-        if (videoDuration is null || audioDuration is null || videoDuration < 0)
+        if (audioDuration is null)
         {
             Assert.Contains(issues, static issue => issue.Code == "TimelineDataIncomplete");
         }
@@ -159,9 +159,9 @@ public sealed class AudioVideoTimelineAnalyzerTests
         var issues = AudioVideoTimelineAnalyzer.Analyze(Scan(
             Video(0, 0, 100), Video(4, 0, null),
             Audio(1, 0, null), Audio(2, null, 100), Audio(3, 0, null)));
-        Assert.Equal(6, issues.Count);
+        Assert.Equal(3, issues.Count);
         Assert.All(issues, static issue => Assert.Equal("TimelineDataIncomplete", issue.Code));
-        Assert.Equal(6, issues.Select(static issue => (issue.VideoStreamIndex, issue.AudioStreamIndex)).Distinct().Count());
+        Assert.Equal(3, issues.Select(static issue => (issue.VideoStreamIndex, issue.AudioStreamIndex)).Distinct().Count());
     }
 
     [Theory]
@@ -202,8 +202,46 @@ public sealed class AudioVideoTimelineAnalyzerTests
         Assert.Contains(large, static issue => issue.Code == "AudioVideoDurationMismatch");
     }
 
+    [Fact]
+    public void NonTemporalVideos_DoNotCreatePairsCountersOrDiagnostics()
+    {
+        var result = Scan(
+            Video(0, 0, 7223.382), Audio(1, 0, 7223.456), Audio(2, 0, 7223.392),
+            Video(3, 0, 0, "mjpeg"), Video(4, 0, 0, "mjpeg"));
+        var issues = AudioVideoTimelineAnalyzer.Analyze(result);
+        Assert.Empty(issues);
+        result.Issues.AddRange(issues);
+        var counters = new AudioVideoScanCounters();
+        counters.Add(result);
+        Assert.Equal(0, counters.AffectedMedia);
+        Assert.Empty(counters.Diagnostics);
+    }
+
+    [Fact]
+    public void AttachedPictureAndMissingDuration_DoNotCreateIncompleteTimeline()
+    {
+        var picture = Video(3, 0, 7223, "mjpeg");
+        picture.IsAttachedPicture = true;
+        Assert.Empty(AudioVideoTimelineAnalyzer.Analyze(Scan(
+            Video(0, 0, 7223), Audio(1, 0, 7223), picture, Video(4, 0, null, "h264"))));
+    }
+
+    [Fact]
+    public void TemporalMjpegAndLongRealAnomaly_AreStillAnalyzed()
+    {
+        var mjpegIssues = AudioVideoTimelineAnalyzer.Analyze(Scan(
+            Video(8, 0, 100, "mjpeg"), Audio(9, 0, 101)));
+        Assert.Contains(mjpegIssues, static issue => issue.Code == "AudioVideoDriftSuspected" && issue.VideoStreamIndex == 8);
+
+        var anomalyIssues = AudioVideoTimelineAnalyzer.Analyze(Scan(
+            Video(0, 0, 9102.176417), Audio(1, 0, 8870.912000)));
+        Assert.Contains(anomalyIssues, static issue => issue.Code == "AudioVideoDurationMismatch");
+        Assert.Contains(anomalyIssues, static issue => issue.Code == "AudioVideoEndMismatch");
+        Assert.Contains(anomalyIssues, static issue => issue.Code == "AudioVideoDriftSuspected");
+    }
+
     private static MediaScanResult Scan(params MediaStreamInfo[] streams) => new() { Streams = streams.ToList() };
-    private static MediaStreamInfo Video(int index, double? start, double? duration) => new() { Index = index, CodecType = "video", CodecName = "h264", StartTimeSeconds = start, DurationSeconds = duration };
+    private static MediaStreamInfo Video(int index, double? start, double? duration, string codec = "h264") => new() { Index = index, CodecType = "video", CodecName = codec, StartTimeSeconds = start, DurationSeconds = duration };
     private static MediaStreamInfo Audio(int index, double? start, double? duration) => new() { Index = index, CodecType = "audio", CodecName = "aac", StartTimeSeconds = start, DurationSeconds = duration };
     private static MediaStreamInfo Other(int index, string type) => new() { Index = index, CodecType = type, CodecName = "subrip" };
 }

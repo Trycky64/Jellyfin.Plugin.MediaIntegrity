@@ -451,6 +451,7 @@ public sealed class MediaProbeService
             result.IsCommentary = GetDisposition(disposition, "comment");
             result.IsAudioDescription = GetDisposition(disposition, "visual_impaired")
                 || GetDisposition(disposition, "descriptions");
+            result.IsAttachedPicture = GetDisposition(disposition, "attached_pic");
         }
 
         return result;

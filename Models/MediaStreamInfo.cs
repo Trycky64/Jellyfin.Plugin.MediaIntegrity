@@ -53,4 +53,9 @@ public sealed class MediaStreamInfo
     public bool IsCommentary { get; set; }
 
     public bool IsAudioDescription { get; set; }
+
+    /// <summary>
+    /// Whether ffprobe marks this stream as an attached picture.
+    /// </summary>
+    public bool IsAttachedPicture { get; set; }
 }

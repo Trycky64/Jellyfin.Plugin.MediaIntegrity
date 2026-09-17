@@ -87,7 +87,7 @@ public static class PacketTimelineAnalyzer
                 static group => (First: group.Min(static packet => packet.PtsSeconds),
                     End: group.Max(static packet => packet.PtsSeconds + packet.DurationSeconds)));
         var issues = new List<MediaIssue>();
-        foreach (var video in scan.Streams.Where(static stream => stream.CodecType == "video"))
+        foreach (var video in scan.Streams.Where(TemporalVideoStreamPolicy.IsEligible))
         {
             foreach (var audio in scan.Streams.Where(static stream => stream.CodecType == "audio"))
             {

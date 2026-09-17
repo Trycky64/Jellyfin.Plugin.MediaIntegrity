@@ -1,14 +1,14 @@
 # Jellyfin Media Integrity
 
-## Audio/video timeline diagnostics (v1.1.0)
+## Audio/video timeline diagnostics (v1.1.1)
 
-During scans, the plugin compares each video stream with each audio stream. It reports significant start offsets, duration mismatches, end mismatches and suspected progressive drift. Conservative diagnostic thresholds are 250 ms for start offsets and the larger of 500 ms or 0.05% of stream duration for duration/end differences. Small codec delay and container rounding are ignored. Optional packet sampling can provide an additional drift warning; it is disabled by default because it needs a second ffprobe pass. The last-scan page shows bounded per-track diagnostics and the ratio `audio duration / video duration`.
+During scans, the plugin compares each temporal video stream with each audio stream. Attached pictures and video streams without a finite positive stream duration are excluded; codec, dimensions and file names are not used to make that decision. It reports significant start offsets, duration mismatches, end mismatches and suspected progressive drift. Conservative diagnostic thresholds are 250 ms for start offsets and the larger of 500 ms or 0.05% of stream duration for duration/end differences. Small codec delay and container rounding are ignored. Optional packet sampling can provide an additional drift warning; it is disabled by default because it needs a second ffprobe pass. The last-scan page shows bounded per-track diagnostics and the ratio `audio duration / video duration`.
 
 These diagnostics describe the source media only. They never trigger an automatic repair, retiming, stream removal, audio/video encoding, `atempo`, `asetpts` or resampling. The v1.0.1 remux validator remains responsible for rejecting drift introduced by a candidate repair.
 
 Detect container and stream issues in a Jellyfin library and repair eligible files with lossless FFmpeg stream copy.
 
-Current release line: v1.1.0. Real remux is fully supported as an explicit opt-in; safe defaults remain unchanged.
+Current release line: v1.1.1. Real remux is fully supported as an explicit opt-in; safe defaults remain unchanged.
 
 ## Features
 

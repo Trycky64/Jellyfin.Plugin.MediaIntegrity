@@ -161,6 +161,27 @@ public sealed class MediaProbeServiceTests
         Assert.False(stream.IsCommentary);
     }
 
+    [Fact]
+    public void ProbeOutput_ParsesAttachedPictureAndZeroDurationTag()
+    {
+        var result = Parse("""
+            {"streams":[
+              {"index":3,"codec_type":"video","codec_name":"mjpeg","duration":"N/A",
+               "tags":{"DURATION":"00:00:00.000000000"},"disposition":{"attached_pic":1}},
+              {"index":4,"codec_type":"video","codec_name":"mjpeg","duration":"0",
+               "disposition":{"attached_pic":0}},
+              {"index":5,"codec_type":"video","codec_name":"mjpeg"}
+            ]}
+            """);
+
+        Assert.True(result.Streams[0].IsAttachedPicture);
+        Assert.Equal(0, result.Streams[0].DurationSeconds);
+        Assert.False(result.Streams[1].IsAttachedPicture);
+        Assert.Equal(0, result.Streams[1].DurationSeconds);
+        Assert.False(result.Streams[2].IsAttachedPicture);
+        Assert.Null(result.Streams[2].DurationSeconds);
+    }
+
     private static MediaScanResult Parse(string output)
     {
         var method = typeof(MediaProbeService).GetMethod(

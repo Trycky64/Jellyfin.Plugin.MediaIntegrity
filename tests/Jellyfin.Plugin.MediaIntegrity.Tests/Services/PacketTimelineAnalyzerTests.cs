@@ -42,12 +42,34 @@ public sealed class PacketTimelineAnalyzerTests
         Assert.Empty(PacketTimelineAnalyzer.AnalyzeSamples(Scan(), [new(0, 0, .04), new(0, 99.96, .04)]));
     }
 
+    [Fact]
+    public void AttachedPictureAndZeroDurationMjpeg_AreIgnored()
+    {
+        var scan = Scan();
+        scan.Streams.Add(new MediaStreamInfo { Index = 2, CodecType = "video", CodecName = "mjpeg", DurationSeconds = 0 });
+        scan.Streams.Add(new MediaStreamInfo { Index = 3, CodecType = "video", CodecName = "mjpeg", DurationSeconds = 100, IsAttachedPicture = true });
+        var issues = PacketTimelineAnalyzer.AnalyzeSamples(scan,
+            [new(0, 0, .04), new(1, 0, .02), new(0, 99.96, .04), new(1, 99.98, .02),
+                new(2, 0, 0), new(2, 99, 0), new(3, 0, .04), new(3, 99.96, .04)]);
+        Assert.Empty(issues);
+    }
+
+    [Fact]
+    public void TemporalMjpegAndRealLongAnomaly_AreStillAnalyzed()
+    {
+        var scan = Scan();
+        scan.Streams[0].CodecName = "mjpeg";
+        var issue = Assert.Single(PacketTimelineAnalyzer.AnalyzeSamples(scan,
+            [new(0, 0, .04), new(1, 0, .02), new(0, 99.96, .04), new(1, 101.08, .02)]));
+        Assert.Equal(0, issue.VideoStreamIndex);
+    }
+
     private static MediaScanResult Scan() => new()
     {
         DurationSeconds = 100,
         Streams =
         [
-            new() { Index = 0, CodecType = "video" },
+            new() { Index = 0, CodecType = "video", DurationSeconds = 100 },
             new() { Index = 1, CodecType = "audio" }
         ]
     };

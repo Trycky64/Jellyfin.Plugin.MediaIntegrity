@@ -21,8 +21,9 @@ public static class AudioVideoTimelineAnalyzer
     {
         ArgumentNullException.ThrowIfNull(scan);
         var issues = new List<MediaIssue>();
-        var videos = scan.Streams.Where(static stream => IsType(stream, "video"));
-        var audios = scan.Streams.Where(static stream => IsType(stream, "audio"));
+        var videos = scan.Streams.Where(TemporalVideoStreamPolicy.IsEligible);
+        var audios = scan.Streams.Where(static stream =>
+            string.Equals(stream.CodecType, "audio", StringComparison.OrdinalIgnoreCase));
 
         foreach (var video in videos)
         {
@@ -142,9 +143,6 @@ public static class AudioVideoTimelineAnalyzer
             AudioDurationSeconds = audio.DurationSeconds,
             OffsetEvolutionSeconds = endDelta is null || startDelta is null ? null : endDelta - startDelta
         };
-
-    private static bool IsType(MediaStreamInfo stream, string type) =>
-        string.Equals(stream.CodecType, type, StringComparison.OrdinalIgnoreCase);
 
     private static string Format(double value) =>
         value.ToString("+0.000000;-0.000000;0.000000", CultureInfo.InvariantCulture);

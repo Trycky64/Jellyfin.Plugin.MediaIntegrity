@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.1
+
+- Exclude attached pictures and video streams without a finite positive
+  stream-local duration from source A/V timeline diagnostics.
+- Keep true temporal MJPEG and all other eligible video streams in analysis;
+  no A/V diagnostic performs an automatic repair or destructive change.
+
 ## 1.1.0
 
 - Detect and report source audio/video start, duration and end timeline differences per video/audio stream pair.
