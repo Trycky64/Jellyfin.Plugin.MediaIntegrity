@@ -126,13 +126,13 @@ Warnings alone do not enter the repair queue. Unreadable files never enter it. S
 
 Start with a scan, inspect logs and run **Media Remux Repair** with DryRun=true. Dry-run still performs remux and validation in cache, but never replaces originals and does not consume attempts. Pending items remain pending.
 
-Real repair is opt-in: disable DryRun deliberately, keep MaxRepairsPerRun=1, run the task, inspect its result, then restore DryRun=true. The plugin does not expose encoder arguments or codec conversion. All FFmpeg invocations use `-c copy`. Media reported as playing is deferred. A final playback check after backup/staging prevents replacement if a session starts during preparation. The writable mirror must exist and its SHA-256 must still match the backed-up source; a wrong mount or changed file aborts the swap.
+Real repair is opt-in: disable DryRun deliberately, keep the relevant per-run limit at 1, run the task, inspect its result, then restore DryRun=true. **Media Remux Repair** remains pure stream copy. **A/V Repair** may re-encode only the single targeted audio stream when `AllowAudioReencode=true`: `AudioTimeStretch` uses the configured `AudioReencodeCodec`, while `AudioPad`/`AudioTrim` preserve the source audio codec using a small explicit map of known-safe encoders. Video is never re-encoded. Media reported as playing is deferred. A final playback check after backup/staging prevents replacement if a session starts during preparation. The writable mirror must exist and its SHA-256 must still match the backed-up source; a wrong mount or changed file aborts the swap.
 
 ### Timeline safety in v1.0.1
 
 Stream copy can rebuild timestamps in a damaged container without changing any codec. Before a candidate can replace media, Media Integrity now compares source and candidate by stream index and order. For every video and audio stream it verifies codec identity, `time_base`, `start_time`, and `duration`; it also compares every video/audio duration relationship. A candidate is rejected when it changes a stream duration by more than 0.05 seconds, changes a stream start time by more than 0.01 seconds, introduces material A/V duration drift, or has unknown audio/video timing that cannot be verified. These conservative checks are separate from the legacy 2-second container-duration tolerance.
 
-The plugin does not use `atempo`, `asetpts`, resampling, or any encoder to work around a rejected candidate. A rejected timeline is preserved in the queue error with a reason such as `StreamDurationChanged`, `StreamStartTimeChanged`, or `AudioVideoDriftIntroduced`; deterministic timing failures do not consume repeated automatic retries.
+The remux-repair validator does not use `atempo`, `asetpts`, resampling, or an encoder to make an otherwise-rejected remux candidate pass. A rejected remux timeline is preserved in the queue error with a reason such as `StreamDurationChanged`, `StreamStartTimeChanged`, or `AudioVideoDriftIntroduced`; deterministic timing failures do not consume repeated automatic retries. The separate v1.2.0 A/V Repair task may intentionally retime or re-encode one targeted audio stream only when its own classification, policy gates, and post-repair validation explicitly allow it.
 
 Since v0.2, failed entries with a consumed attempt are retried on later task runs until MaxRepairAttempts. Rejected paths with zero attempts are excluded. Entries left Processing after an abrupt crash require manual inspection of the backup manifest and current media before retry; the outcome may be ambiguous. A new scan generates a fresh queue, so do not use repeated scans to bypass the attempt cap.
 
@@ -140,7 +140,7 @@ Since v0.2, failed entries with a consumed attempt are retried on later task run
 
 `/media/series/Show/episode.mp4` maps to `/repair-backups/series/Show/episode.mp4`. Collisions add `.original-<UTC timestamp>-<unique id>` before the extension. Every successful backup transaction writes `<backup>.metadata.json` with schema version, source/backup/repaired paths, timestamp, SHA-256 hashes, algorithm and plugin version **before replacement**.
 
-The repaired hash describes the validated replacement candidate. A manifest is a recovery record, not proof that the swap completed: cancellation or failure can leave a backup/manifest without an installed repair. Compare hashes against the current file. Backups are never automatically deleted, including legacy KeepBackups=false. A future **Clean Media Repair Backups** task can use these versioned manifests; it is not shipped in v0.1.
+The repaired hash describes the validated replacement candidate. A manifest is a recovery record, not proof that the swap completed: cancellation or failure can leave a backup/manifest without an installed repair. Compare hashes against the current file. Backups are retained by default. For v1.2.0 A/V repairs only, `DeleteBackupAfterSuccessfulValidation=true` may delete that repair's backup and manifest **only after** successful transactional replacement and full post-replacement validation. Failed or rolled-back repairs retain their backups. There is still no general-purpose automatic backup purge task.
 
 To restore manually:
 
@@ -165,7 +165,7 @@ The plugin attempts rollback from the verified backup after a detected post-swap
 - Checks are structural and packet-based, not full video/audio decoding or proof that content is visually correct.
 - Filesystem path checks narrow races but cannot guarantee safety against a concurrent privileged filesystem attacker.
 - Playback detection uses Jellyfin sessions, including a final check after the backup/staging copies. External players and playback starting after that final check cannot be locked out by this plugin.
-- No automatic backup cleanup; monitor free disk space.
+- No general automatic backup purge; monitor free disk space. The optional `DeleteBackupAfterSuccessfulValidation` setting only removes the backup created for a successful A/V repair after full post-replacement validation.
 - Current scan is sequential; changing MaxParallelProbes does not speed it up.
 - Preservation of all metadata/attachments depends on FFmpeg container support; validation fails closed on detected incompatibility.
 - Some valid files lack stream-level timing. The repair pipeline refuses their automatic replacement rather than assuming the timing is preserved.
