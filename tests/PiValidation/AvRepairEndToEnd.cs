@@ -60,6 +60,8 @@ public static class AvRepairEndToEnd
             report["audioEndsEarlyPad"] = await RunAudioPadCase(sourceRoot, repairRoot, probe, executionService, validationService, replacementService, configuration);
             report["multiAudioChained"] = await RunMultiAudioCase(sourceRoot, repairRoot, probe, executionService, validationService, replacementService, configuration);
             report["backupDeletedAfterSuccess"] = await RunBackupDeletionCase(sourceRoot, repairRoot, probe, executionService, validationService, replacementService, configuration);
+            report["partialTailWindowMustNotAutoRepair"] = await RunPartialTailWindowCase(sourceRoot, probe);
+            report["consistentBoundedTrimStillEligible"] = await RunConsistentTrimPlanningCase(sourceRoot, probe);
 
             return report;
         }
@@ -317,6 +319,82 @@ public static class AvRepairEndToEnd
             metadataRemovedAfterDeletion = !File.Exists(metadataPath)
         };
     }
+
+    /// <summary>
+    /// v1.2.1 regression: the audio track runs 10.8s longer than the video
+    /// track (start in sync). The real packet sampler's tail window does not
+    /// reach the audio's real end, so packet evidence alone would show a
+    /// small, "bounded" drift. Planning only: nothing is executed or modified.
+    /// </summary>
+    private static async Task<object> RunPartialTailWindowCase(string sourceRoot, MediaProbeService probe)
+    {
+        var source = Path.Combine(sourceRoot, "Movies", "E2E-PartialTailWindow", "test.mkv");
+        Directory.CreateDirectory(Path.GetDirectoryName(source)!);
+        await RunFfmpeg(
+            "-y", "-v", "error",
+            "-f", "lavfi", "-i", "testsrc=size=64x64:rate=10:duration=30",
+            "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=40.8",
+            "-map", "0:v", "-map", "1:a", "-c:v", "libx264", "-g", "50", "-keyint_min", "50", "-pix_fmt", "yuv420p",
+            "-c:a", "aac", source);
+
+        var configuration = PlanningOnlyConfiguration();
+        var beforeProbe = await probe.ProbeAsync(source, 30, CancellationToken.None);
+        var packets = await PacketTimelineAnalyzer.FetchPacketsAsync(source, beforeProbe.ScanResult.DurationSeconds ?? 0, 30, CancellationToken.None);
+        var evidence = PacketTimelineAnalyzer.ComputeEvidence(beforeProbe.ScanResult, packets);
+        var diagnosis = AvRepairClassifier.ClassifyAll(beforeProbe.ScanResult, evidence, configuration).Single();
+        var plan = AvRepairPlanner.PlanMedia([diagnosis], configuration).Single();
+
+        return new
+        {
+            metadataDurationDeltaSeconds = diagnosis.DurationDeltaSeconds,
+            packetDriftSeconds = diagnosis.PacketEvidence?.Drift,
+            packetDriftBelowAutoRepairLimit = Math.Abs(diagnosis.PacketEvidence?.Drift ?? double.MaxValue)
+                <= configuration.MaxAutoRepairDurationDeltaSeconds,
+            classification = diagnosis.Classification.ToString(),
+            strategy = plan.Strategy.ToString(),
+            trimSeconds = plan.TrimSeconds,
+            autoRepairEligible = plan.IsAutoRepairEligible,
+            reason = diagnosis.Reason
+        };
+    }
+
+    /// <summary>Control: a small, coherent end mismatch is still planned as AudioTrim. Planning only.</summary>
+    private static async Task<object> RunConsistentTrimPlanningCase(string sourceRoot, MediaProbeService probe)
+    {
+        var source = Path.Combine(sourceRoot, "Movies", "E2E-ConsistentTrim", "test.mkv");
+        Directory.CreateDirectory(Path.GetDirectoryName(source)!);
+        await RunFfmpeg(
+            "-y", "-v", "error",
+            "-f", "lavfi", "-i", "testsrc=size=64x64:rate=10:duration=8",
+            "-f", "lavfi", "-i", "sine=frequency=440:duration=9",
+            "-map", "0:v", "-map", "1:a", "-c:v", "libx264", "-g", "5", "-keyint_min", "5", "-pix_fmt", "yuv420p",
+            "-c:a", "aac", "-ar", "48000", "-ac", "2", source);
+
+        var configuration = PlanningOnlyConfiguration();
+        var beforeProbe = await probe.ProbeAsync(source, 30, CancellationToken.None);
+        var packets = await PacketTimelineAnalyzer.FetchPacketsAsync(source, beforeProbe.ScanResult.DurationSeconds ?? 0, 30, CancellationToken.None);
+        var evidence = PacketTimelineAnalyzer.ComputeEvidence(beforeProbe.ScanResult, packets);
+        var diagnosis = AvRepairClassifier.ClassifyAll(beforeProbe.ScanResult, evidence, configuration).Single();
+        var plan = AvRepairPlanner.PlanMedia([diagnosis], configuration).Single();
+
+        return new
+        {
+            metadataDurationDeltaSeconds = diagnosis.DurationDeltaSeconds,
+            packetDriftSeconds = diagnosis.PacketEvidence?.Drift,
+            classification = diagnosis.Classification.ToString(),
+            strategy = plan.Strategy.ToString(),
+            trimSeconds = plan.TrimSeconds,
+            autoRepairEligible = plan.IsAutoRepairEligible
+        };
+    }
+
+    private static PluginConfiguration PlanningOnlyConfiguration() => new()
+    {
+        DryRun = true,
+        EnableAudioVideoRepair = true,
+        AllowAudioReencode = true,
+        MaxAutoRepairDurationDeltaSeconds = 2.0
+    };
 
     /// <summary>
     /// In production, RepairRoot is a second bind mount of the exact same

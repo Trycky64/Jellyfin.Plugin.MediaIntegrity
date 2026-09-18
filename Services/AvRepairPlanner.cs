@@ -44,6 +44,14 @@ public static class AvRepairPlanner
                 $"{Format(configuration.MinRepairConfidence)}.");
         }
 
+        // Defense in depth: the classifier already refuses inconsistent
+        // evidence, but a plan is only ever built from evidence that agrees
+        // with stream-level metadata (same rule, see AvEvidenceConsistency).
+        if (AvEvidenceConsistency.Reconcile(diagnosis).Conflict is { } conflict)
+        {
+            return ManualOnly(plan, conflict);
+        }
+
         return diagnosis.Classification switch
         {
             AvRepairClassification.None => ManualOnly(plan, "No anomaly was classified."),
@@ -118,11 +126,12 @@ public static class AvRepairPlanner
         AvRepairPlan plan, AvRepairDiagnosis diagnosis, PluginConfiguration configuration)
     {
         var offset = diagnosis.PacketEvidence?.StartOffsetSeconds ?? diagnosis.StartOffsetSeconds;
+        var gateMagnitude = Math.Max(Math.Abs(offset), Math.Abs(diagnosis.StartOffsetSeconds));
 
-        if (Math.Abs(offset) > configuration.MaxAutoRepairOffsetSeconds)
+        if (gateMagnitude > configuration.MaxAutoRepairOffsetSeconds)
         {
             return ManualOnly(plan,
-                $"Offset {Format(offset)}s exceeds the configured MaxAutoRepairOffsetSeconds " +
+                $"Offset {Format(gateMagnitude)}s exceeds the configured MaxAutoRepairOffsetSeconds " +
                 $"({Format(configuration.MaxAutoRepairOffsetSeconds)}s).");
         }
 
@@ -151,8 +160,9 @@ public static class AvRepairPlanner
             return ManualOnly(plan, "Video duration is unknown or non-positive; cannot compute a safe atempo factor.");
         }
 
-        var drift = diagnosis.PacketEvidence?.Drift ?? diagnosis.DurationDeltaSeconds;
-        var driftRatio = Math.Abs(drift) / diagnosis.VideoDurationSeconds;
+        var drift = AvEvidenceConsistency.Reconcile(diagnosis).MetadataDriftSeconds;
+        var gateDrift = Math.Max(Math.Abs(drift), Math.Abs(diagnosis.PacketEvidence?.Drift ?? 0));
+        var driftRatio = gateDrift / diagnosis.VideoDurationSeconds;
 
         if (driftRatio > configuration.MaxAutoRepairDriftRatio)
         {
@@ -194,12 +204,26 @@ public static class AvRepairPlanner
                 "and AllowAudioReencode=false.");
         }
 
-        var magnitude = Math.Abs(diagnosis.PacketEvidence?.Drift ?? diagnosis.DurationDeltaSeconds);
+        // The amount to pad/trim is the stream-level metadata delta: it is
+        // what post-repair validation re-measures, and sampled packets are
+        // only a confirmation of it. The limit is checked against the most
+        // demanding of the two sources so a partial packet sample can never
+        // pull a larger anomaly under the auto-repair limit.
+        var delta = AvEvidenceConsistency.Reconcile(diagnosis).MetadataDriftSeconds;
+        var magnitude = Math.Abs(delta);
+        var gateMagnitude = Math.Max(magnitude, Math.Abs(diagnosis.PacketEvidence?.Drift ?? 0));
 
-        if (magnitude > configuration.MaxAutoRepairDurationDeltaSeconds)
+        if (!double.IsFinite(delta) || magnitude < AvRepairClassifier.DriftSignalFloorSeconds || (delta < 0) != isEarly)
         {
             return ManualOnly(plan,
-                $"Magnitude {Format(magnitude)}s exceeds the configured MaxAutoRepairDurationDeltaSeconds " +
+                $"Stream metadata duration delta {Format(delta)}s does not match a " +
+                $"{(isEarly ? "short" : "long")} audio track; refusing an automatic {(isEarly ? "pad" : "trim")}.");
+        }
+
+        if (gateMagnitude > configuration.MaxAutoRepairDurationDeltaSeconds)
+        {
+            return ManualOnly(plan,
+                $"Magnitude {Format(gateMagnitude)}s exceeds the configured MaxAutoRepairDurationDeltaSeconds " +
                 $"({Format(configuration.MaxAutoRepairDurationDeltaSeconds)}s).");
         }
 

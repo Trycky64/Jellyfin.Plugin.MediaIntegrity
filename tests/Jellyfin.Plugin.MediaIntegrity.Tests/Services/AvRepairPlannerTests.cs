@@ -246,6 +246,119 @@ public sealed class AvRepairPlannerTests
         Assert.Equal(AvRepairStrategy.ManualOnly, plans.Single(p => p.AudioStreamIndex == 2).Strategy);
     }
 
+    // ---- v1.2.1: sampled packet evidence may never lower a metadata anomaly ----
+
+    [Fact]
+    public void AudioEndsLate_PartialTailWindowBelowLimit_MetadataFarAbove_IsNeverTrimmed()
+    {
+        // Generic reproduction of the v1.2.0 bug: stream-level delta +10.8s,
+        // sampled tail window only saw +1.897s, limit 2.0s.
+        var plan = Plan(BoundedDiagnosis(AvRepairClassification.AudioEndsLate, metadataDelta: 10.8,
+            packetStart: 0, packetEnd: 1.897));
+        Assert.Equal(AvRepairStrategy.ManualOnly, plan.Strategy);
+        Assert.Null(plan.TrimSeconds);
+        Assert.False(plan.IsAutoRepairEligible);
+    }
+
+    [Fact]
+    public void AudioEndsLate_ConsistentBoundedEvidence_TrimsMetadataDelta()
+    {
+        var plan = Plan(BoundedDiagnosis(AvRepairClassification.AudioEndsLate, metadataDelta: 1.0,
+            packetStart: 0, packetEnd: 1.1));
+        Assert.Equal(AvRepairStrategy.AudioTrim, plan.Strategy);
+        Assert.Equal(1.0, plan.TrimSeconds);
+        Assert.True(plan.IsAutoRepairEligible);
+    }
+
+    [Fact]
+    public void AudioEndsEarly_ConsistentBoundedEvidence_PadsMetadataDelta()
+    {
+        var plan = Plan(BoundedDiagnosis(AvRepairClassification.AudioEndsEarly, metadataDelta: -1.0,
+            packetStart: 0, packetEnd: -0.9));
+        Assert.Equal(AvRepairStrategy.AudioPad, plan.Strategy);
+        Assert.Equal(1.0, plan.PadSeconds);
+    }
+
+    [Fact]
+    public void AudioEndsLate_MetadataAboveLimit_PacketBelow_IsManualOnly()
+    {
+        // Within the 0.5s tolerance, but straddling the 2.0s limit.
+        var plan = Plan(BoundedDiagnosis(AvRepairClassification.AudioEndsLate, metadataDelta: 2.3,
+            packetStart: 0, packetEnd: 1.9));
+        Assert.Equal(AvRepairStrategy.ManualOnly, plan.Strategy);
+    }
+
+    [Fact]
+    public void AudioEndsLate_PacketAboveLimit_MetadataBelow_IsManualOnly()
+    {
+        var plan = Plan(BoundedDiagnosis(AvRepairClassification.AudioEndsLate, metadataDelta: 1.9,
+            packetStart: 0, packetEnd: 2.3));
+        Assert.Equal(AvRepairStrategy.ManualOnly, plan.Strategy);
+    }
+
+    [Fact]
+    public void AudioEndsLate_OppositeSignBetweenMetadataAndPacket_IsManualOnly()
+    {
+        var plan = Plan(BoundedDiagnosis(AvRepairClassification.AudioEndsLate, metadataDelta: 1.0,
+            packetStart: 0, packetEnd: -1.0));
+        Assert.Equal(AvRepairStrategy.ManualOnly, plan.Strategy);
+    }
+
+    [Fact]
+    public void AudioEndsLate_MetadataDeltaOfWrongSign_IsManualOnly()
+    {
+        var plan = Plan(BoundedDiagnosis(AvRepairClassification.AudioEndsLate, metadataDelta: -1.0,
+            packetStart: null, packetEnd: null));
+        Assert.Equal(AvRepairStrategy.ManualOnly, plan.Strategy);
+    }
+
+    [Fact]
+    public void ConstantOffset_PacketSeesNoDriftButMetadataDoes_IsManualOnly()
+    {
+        var diagnosis = ConstantOffsetDiagnosis(1.5, confidence: 0.95);
+        diagnosis.DurationDeltaSeconds = 10.8;
+        diagnosis.EndOffsetSeconds = 12.3;
+        Assert.Equal(AvRepairStrategy.ManualOnly, Plan(diagnosis).Strategy);
+    }
+
+    [Fact]
+    public void ProgressiveDrift_PartialPacketWindow_DoesNotLowerMetadataDrift()
+    {
+        var configuration = Enabled();
+        configuration.AllowAudioReencode = true;
+        configuration.MaxAutoRepairDriftRatio = 0.001;
+        // metadata drift 10.8s / 5000s = 0.00216 > 0.001; packet drift 3.0s would pass.
+        var diagnosis = ProgressiveDriftDiagnosis(videoDuration: 5000, drift: 10.8, confidence: 0.9);
+        diagnosis.PacketEvidence = diagnosis.PacketEvidence! with { EndOffsetSeconds = 10.5 };
+        Assert.Equal(AvRepairStrategy.ManualOnly, AvRepairPlanner.Plan(diagnosis, configuration).Strategy);
+    }
+
+    private static AvRepairPlan Plan(AvRepairDiagnosis diagnosis)
+    {
+        var configuration = Enabled();
+        configuration.AllowAudioReencode = true;
+        return AvRepairPlanner.Plan(diagnosis, configuration);
+    }
+
+    private static AvRepairDiagnosis BoundedDiagnosis(
+        AvRepairClassification classification, double metadataDelta, double? packetStart, double? packetEnd) => new()
+        {
+            Classification = classification,
+            Confidence = 0.85,
+            DurationDeltaSeconds = metadataDelta,
+            EndOffsetSeconds = metadataDelta,
+            AudioCodecName = "aac",
+            PacketEvidence = packetStart is null || packetEnd is null
+            ? null
+            : new AvPacketEvidence
+            {
+                VideoStreamIndex = 0,
+                AudioStreamIndex = 1,
+                StartOffsetSeconds = packetStart.Value,
+                EndOffsetSeconds = packetEnd.Value
+            }
+        };
+
     private static PluginConfiguration Enabled() => new() { EnableAudioVideoRepair = true };
 
     private static AvRepairDiagnosis ConstantOffsetDiagnosis(double offset, double confidence) => new()
@@ -253,6 +366,7 @@ public sealed class AvRepairPlannerTests
         Classification = AvRepairClassification.ConstantOffset,
         Confidence = confidence,
         StartOffsetSeconds = offset,
+        EndOffsetSeconds = offset,
         PacketEvidence = new AvPacketEvidence
         {
             VideoStreamIndex = 0,
@@ -269,6 +383,7 @@ public sealed class AvRepairPlannerTests
         VideoDurationSeconds = videoDuration,
         AudioDurationSeconds = videoDuration + drift,
         DurationDeltaSeconds = drift,
+        EndOffsetSeconds = drift,
         DurationRatio = (videoDuration + drift) / videoDuration,
         PacketEvidence = new AvPacketEvidence
         {

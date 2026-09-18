@@ -216,6 +216,190 @@ public sealed class AvRepairClassifierTests
         Assert.Equal(0.0, diagnosis.Confidence);
     }
 
+    // ---- v1.2.1: packet evidence is a confirmation, never an authority ----
+
+    [Fact]
+    public void PartialTailWindow_MetadataFarAboveLimit_IsAmbiguousNotAudioEndsLate()
+    {
+        // Case A: metadata +10.8s (start in sync), sampled packets +1.897s, limit 2.0s.
+        var evidence = Evidence(0, 0, startOffset: 0, endOffset: 1.897);
+        var diagnosis = Classify(Video(0, 100), Audio(0, 110.8), evidence);
+        Assert.Equal(AvRepairClassification.Ambiguous, diagnosis.Classification);
+        Assert.Contains("conflicts", diagnosis.Reason);
+        Assert.False(diagnosis.IsPotentiallyAutoRepairable);
+        var plan = AvRepairPlanner.Plan(diagnosis, PlanningConfiguration());
+        Assert.Equal(AvRepairStrategy.ManualOnly, plan.Strategy);
+        Assert.Null(plan.TrimSeconds);
+    }
+
+    [Fact]
+    public void ConsistentBoundedLateEnd_IsAudioEndsLateWithMetadataMagnitude()
+    {
+        // Case B
+        var evidence = Evidence(0, 0, startOffset: 0, endOffset: 1.05);
+        var diagnosis = Classify(Video(0, 100), Audio(0, 101), evidence);
+        Assert.Equal(AvRepairClassification.AudioEndsLate, diagnosis.Classification);
+        var plan = AvRepairPlanner.Plan(diagnosis, PlanningConfiguration());
+        Assert.Equal(AvRepairStrategy.AudioTrim, plan.Strategy);
+        Assert.Equal(1.0, plan.TrimSeconds!.Value, 6);
+        Assert.True(plan.IsAutoRepairEligible);
+    }
+
+    [Fact]
+    public void ConsistentBoundedEarlyEnd_IsAudioEndsEarlyAndPads()
+    {
+        // Case C
+        var evidence = Evidence(0, 0, startOffset: 0, endOffset: -1.05);
+        var diagnosis = Classify(Video(0, 100), Audio(0, 99), evidence);
+        Assert.Equal(AvRepairClassification.AudioEndsEarly, diagnosis.Classification);
+        var plan = AvRepairPlanner.Plan(diagnosis, PlanningConfiguration());
+        Assert.Equal(AvRepairStrategy.AudioPad, plan.Strategy);
+        Assert.Equal(1.0, plan.PadSeconds!.Value, 6);
+    }
+
+    [Fact]
+    public void MetadataAboveLimit_PacketBelowLimit_NeverAutoRepairs()
+    {
+        // Case D, both a straddle within tolerance and a gross divergence.
+        foreach (var (metadataDelta, packetEnd) in new[] { (2.3, 1.9), (2.6, 1.0), (10.8, 1.5) })
+        {
+            var evidence = Evidence(0, 0, startOffset: 0, endOffset: packetEnd);
+            var diagnosis = Classify(Video(0, 100), Audio(0, 100 + metadataDelta), evidence);
+            Assert.Equal(AvRepairClassification.Ambiguous, diagnosis.Classification);
+            Assert.Equal(AvRepairStrategy.ManualOnly, AvRepairPlanner.Plan(diagnosis, PlanningConfiguration()).Strategy);
+        }
+    }
+
+    [Fact]
+    public void PacketAboveLimit_MetadataBelowLimit_NeverAutoRepairs()
+    {
+        // Case E: never resolved in favor of the more favorable value.
+        foreach (var (metadataDelta, packetEnd) in new[] { (1.9, 2.3), (1.0, 2.6), (0.6, 3.0) })
+        {
+            var evidence = Evidence(0, 0, startOffset: 0, endOffset: packetEnd);
+            var diagnosis = Classify(Video(0, 100), Audio(0, 100 + metadataDelta), evidence);
+            Assert.Equal(AvRepairClassification.Ambiguous, diagnosis.Classification);
+            Assert.Equal(AvRepairStrategy.ManualOnly, AvRepairPlanner.Plan(diagnosis, PlanningConfiguration()).Strategy);
+        }
+    }
+
+    [Fact]
+    public void OppositeSignBetweenMetadataAndPackets_IsAmbiguous()
+    {
+        // Case F
+        var evidence = Evidence(0, 0, startOffset: 0, endOffset: -1.0);
+        var diagnosis = Classify(Video(0, 100), Audio(0, 101), evidence);
+        Assert.Equal(AvRepairClassification.Ambiguous, diagnosis.Classification);
+        Assert.Contains("opposite direction", diagnosis.Reason);
+        Assert.Equal(AvRepairStrategy.ManualOnly, AvRepairPlanner.Plan(diagnosis, PlanningConfiguration()).Strategy);
+    }
+
+    [Fact]
+    public void PacketDriftWithoutMetadataCorroboration_IsAmbiguous()
+    {
+        // Metadata says aligned (0.2s), packets say 0.6s: within tolerance, but
+        // a sampled drift alone must not be enough to plan an end repair.
+        var evidence = Evidence(0, 0, startOffset: 0, endOffset: 0.6);
+        var diagnosis = Classify(Video(0, 100), Audio(0, 100.2), evidence);
+        Assert.Equal(AvRepairClassification.Ambiguous, diagnosis.Classification);
+    }
+
+    [Fact]
+    public void ConstantOffset_WhenMetadataShowsUnseenDurationDelta_IsNotConstantOffset()
+    {
+        var evidence = Evidence(0, 0, startOffset: 1.5, endOffset: 1.6);
+        var diagnosis = Classify(Video(0, 100, videoStart: 0), Audio(0, 100.55, audioStart: 1.5), evidence);
+        Assert.NotEqual(AvRepairClassification.ConstantOffset, diagnosis.Classification);
+    }
+
+    [Fact]
+    public void StartOffsetDisagreement_IsAmbiguous()
+    {
+        var evidence = Evidence(0, 0, startOffset: 1.5, endOffset: 1.5);
+        var diagnosis = Classify(Video(0, 100, videoStart: 0), Audio(0, 100, audioStart: 1.0), evidence);
+        Assert.Equal(AvRepairClassification.Ambiguous, diagnosis.Classification);
+    }
+
+    [Theory]
+    [InlineData(0.25, true)]
+    [InlineData(0.26, false)]
+    public void StartTolerance_BoundaryIsInclusive(double packetStart, bool consistent)
+    {
+        var diagnosis = new AvRepairDiagnosis
+        {
+            StartOffsetSeconds = 0,
+            PacketEvidence = Evidence(0, 0, startOffset: packetStart, endOffset: packetStart)
+        };
+        Assert.Equal(consistent, AvEvidenceConsistency.Reconcile(diagnosis).IsConsistent);
+    }
+
+    [Theory]
+    [InlineData(1.5, true)]
+    [InlineData(1.51, false)]
+    public void EndTolerance_BoundaryIsInclusive(double packetEnd, bool consistent)
+    {
+        var diagnosis = new AvRepairDiagnosis
+        {
+            DurationDeltaSeconds = 1.0,
+            EndOffsetSeconds = 1.0,
+            PacketEvidence = Evidence(0, 0, startOffset: 0, endOffset: packetEnd)
+        };
+        Assert.Equal(consistent, AvEvidenceConsistency.Reconcile(diagnosis).IsConsistent);
+    }
+
+    [Fact]
+    public void ConsistencyTolerances_AreTheDocumentedSignalFloors()
+    {
+        Assert.Equal(AvRepairClassifier.OffsetSignalFloorSeconds, AvEvidenceConsistency.StartToleranceSeconds);
+        Assert.Equal(AvRepairClassifier.DriftSignalFloorSeconds, AvEvidenceConsistency.EndToleranceSeconds);
+    }
+
+    [Fact]
+    public void NoPacketEvidence_HasNoConflict()
+    {
+        var result = AvEvidenceConsistency.Reconcile(new AvRepairDiagnosis { DurationDeltaSeconds = 10.8 });
+        Assert.True(result.IsConsistent);
+        Assert.Equal(10.8, result.MetadataDriftSeconds);
+    }
+
+    [Fact]
+    public void ConstantOffset_WhenMuxerReportsEndTimestampAsDuration_IsStillConstantOffset()
+    {
+        // Some muxers (e.g. ffmpeg Matroska DURATION tags) report the end
+        // timestamp: audio starts at 1.5s and lasts 6s, tagged as 7.5s.
+        var evidence = Evidence(0, 0, startOffset: 1.5, endOffset: 1.5);
+        var diagnosis = Classify(Video(0, 6, videoStart: 0), Audio(0, 7.5, audioStart: 1.5), evidence);
+        Assert.Equal(AvRepairClassification.ConstantOffset, diagnosis.Classification);
+    }
+
+    [Fact]
+    public void ConstantOffset_WhenPacketsHideARealEndMismatchUnderBothDurationReadings_IsAmbiguous()
+    {
+        // Start offset 1.5s, audio tagged 3.0s longer than video: no reading of
+        // the metadata is compatible with a packet-measured constant offset.
+        var evidence = Evidence(0, 0, startOffset: 1.5, endOffset: 1.5);
+        var diagnosis = Classify(Video(0, 6, videoStart: 0), Audio(0, 9, audioStart: 1.5), evidence);
+        Assert.Equal(AvRepairClassification.Ambiguous, diagnosis.Classification);
+    }
+
+    [Fact]
+    public void InSyncStart_HasSingleMetadataReading_SoPartialWindowCannotBeExplainedAway()
+    {
+        var diagnosis = new AvRepairDiagnosis
+        {
+            StartOffsetSeconds = 0,
+            DurationDeltaSeconds = 10.8,
+            EndOffsetSeconds = 10.8,
+            PacketEvidence = Evidence(0, 0, startOffset: 0, endOffset: 1.897)
+        };
+        var result = AvEvidenceConsistency.Reconcile(diagnosis);
+        Assert.False(result.IsConsistent);
+        Assert.Equal(10.8, result.MetadataDriftSeconds);
+    }
+
+    private static PluginConfiguration PlanningConfiguration() =>
+        new() { EnableAudioVideoRepair = true, AllowAudioReencode = true };
+
     private static AvRepairDiagnosis Classify(MediaStreamInfo video, MediaStreamInfo audio, AvPacketEvidence? evidence) =>
         AvRepairClassifier.Classify(video, audio, evidence, Configuration);
 

@@ -157,6 +157,19 @@ public static class PacketTimelineAnalyzer
     /// exceeds the diagnostic issue threshold used by
     /// <see cref="AnalyzeSamples"/>. Used by <see cref="AvRepairClassifier"/>
     /// to confirm or reject container-metadata-level signals.
+    ///
+    /// The result is a bounded sample, not a measurement of the stream ends.
+    /// The tail window is requested at <c>duration - 2</c>, but ffprobe places
+    /// the end of a "%+2" interval two seconds after the first packet read
+    /// following the seek (which lands on an earlier keyframe). When one
+    /// stream ends before the container duration, or keyframes are sparse,
+    /// the other stream's real end is not in the window and
+    /// <see cref="AvPacketEvidence.EndOffsetSeconds"/> can under-report the
+    /// real difference by many seconds. The true end cannot be recovered from
+    /// a partial window without reading the whole file, so it is not guessed:
+    /// consumers must check the evidence against stream-level metadata with
+    /// <see cref="AvEvidenceConsistency"/> and never let it lower a metadata
+    /// anomaly.
     /// </summary>
     public static IReadOnlyDictionary<(int VideoIndex, int AudioIndex), AvPacketEvidence> ComputeEvidence(
         MediaScanResult scan, IEnumerable<PacketTimestamp> packets)

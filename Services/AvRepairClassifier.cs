@@ -18,6 +18,14 @@ namespace Jellyfin.Plugin.MediaIntegrity.Services;
 /// (safely pad/trim-able); a larger or start-offset-compounded evolution is
 /// treated as a genuine progressive drift (only correctable, if at all, with
 /// an opt-in proportional audio time-stretch).
+///
+/// Packet evidence is a confirmation of the stream-level metadata, never an
+/// authority over it: the tail window is anchored on a seek target and can
+/// miss the real end of a stream (see <see cref="AvEvidenceConsistency"/>).
+/// Whenever packet evidence and metadata disagree beyond the documented
+/// tolerance, or straddle the auto-repair limit, the result is
+/// <see cref="AvRepairClassification.Ambiguous"/>; the smaller of the two
+/// magnitudes is never used.
 /// </summary>
 public static class AvRepairClassifier
 {
@@ -105,9 +113,22 @@ public static class AvRepairClassifier
                 "the offset pattern cannot be trusted for an automatic repair.");
         }
 
+        // Step 0c: packet evidence must agree with stream-level metadata. A
+        // sampled window can under-report the real end mismatch, so a
+        // disagreement is never resolved in favor of either source.
+        var reconciled = AvEvidenceConsistency.Reconcile(diagnosis);
+        if (reconciled.Conflict is { } conflict)
+        {
+            return Finalize(diagnosis, AvRepairClassification.Ambiguous, 0.3, conflict);
+        }
+
+        // The metadata evolution that agrees with the packets (equals the
+        // duration delta unless a start offset makes the duration semantics matter).
+        var metadataDrift = reconciled.MetadataDriftSeconds;
+
         // Step 1: no meaningful signal at all.
         if (Math.Abs(startOffset) < OffsetSignalFloorSeconds
-            && Math.Abs(durationDelta) < DriftSignalFloorSeconds
+            && Math.Abs(metadataDrift) < DriftSignalFloorSeconds
             && Math.Abs(offsetForGate) < OffsetSignalFloorSeconds
             && Math.Abs(driftForGate) < DriftSignalFloorSeconds)
         {
@@ -116,7 +137,11 @@ public static class AvRepairClassifier
         }
 
         // Step 2: a stable offset with negligible evolution -> constant offset.
-        if (Math.Abs(offsetForGate) >= OffsetSignalFloorSeconds && Math.Abs(driftForGate) < DriftSignalFloorSeconds)
+        // Both sources must show a negligible evolution: a metadata duration
+        // delta the sampled packets did not see is not a constant offset.
+        if (Math.Abs(offsetForGate) >= OffsetSignalFloorSeconds
+            && Math.Abs(driftForGate) < DriftSignalFloorSeconds
+            && Math.Abs(metadataDrift) < DriftSignalFloorSeconds)
         {
             return confirmed
                 ? Finalize(diagnosis, AvRepairClassification.ConstantOffset, 0.92,
@@ -152,19 +177,40 @@ public static class AvRepairClassifier
                     "no independent packet evidence; magnitude requires manual review.");
             }
 
-            var startsInSync = Math.Abs(offsetForGate) < OffsetSignalFloorSeconds;
-            var isBounded = Math.Abs(driftForGate) <= configuration.MaxAutoRepairDurationDeltaSeconds;
-
-            if (startsInSync && isBounded)
+            // Metadata must corroborate the packet-measured evolution: a
+            // sampled drift alone is never enough to plan an end repair.
+            if (Math.Abs(metadataDrift) < DriftSignalFloorSeconds)
             {
-                var classification = driftForGate < 0
+                return Finalize(diagnosis, AvRepairClassification.Ambiguous, 0.3,
+                    $"Packet timestamps show a {Format(driftForGate)}s drift but stream metadata reports only " +
+                    $"{Format(metadataDrift)}s; the sampled evidence is not corroborated.");
+            }
+
+            // Every gate below uses the most demanding of the two sources,
+            // never the most favorable one.
+            var startsInSync = Math.Max(Math.Abs(offsetForGate), Math.Abs(startOffset)) < OffsetSignalFloorSeconds;
+            var strictestMagnitude = Math.Max(Math.Abs(driftForGate), Math.Abs(metadataDrift));
+            var mildestMagnitude = Math.Min(Math.Abs(driftForGate), Math.Abs(metadataDrift));
+            var limit = configuration.MaxAutoRepairDurationDeltaSeconds;
+
+            if (startsInSync && strictestMagnitude <= limit)
+            {
+                var classification = metadataDrift < 0
                     ? AvRepairClassification.AudioEndsEarly
                     : AvRepairClassification.AudioEndsLate;
 
                 return Finalize(diagnosis, classification, 0.85,
-                    $"Packet timestamps confirm the file starts in sync and the audio track " +
-                    $"{(driftForGate < 0 ? "ends" : "runs")} {Format(Math.Abs(driftForGate))}s " +
-                    $"{(driftForGate < 0 ? "early" : "late")}, within the bounded single-sided repair range.");
+                    $"Packet timestamps and stream metadata agree that the file starts in sync and the audio track " +
+                    $"{(metadataDrift < 0 ? "ends" : "runs")} {Format(Math.Abs(metadataDrift))}s " +
+                    $"{(metadataDrift < 0 ? "early" : "late")}, within the bounded single-sided repair range.");
+            }
+
+            if (startsInSync && mildestMagnitude <= limit)
+            {
+                return Finalize(diagnosis, AvRepairClassification.Ambiguous, 0.3,
+                    $"Packet drift {Format(driftForGate)}s and metadata delta {Format(metadataDrift)}s fall on " +
+                    $"opposite sides of the {Format(limit)}s bounded-repair limit; cannot be classified as " +
+                    "either a bounded end mismatch or a progressive drift.");
             }
 
             return Finalize(diagnosis, AvRepairClassification.ProgressiveDrift, 0.85,
