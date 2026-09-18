@@ -8,7 +8,7 @@ These diagnostics describe the source media only. They never trigger an automati
 
 Detect container and stream issues in a Jellyfin library and repair eligible files with lossless FFmpeg stream copy.
 
-Current release line: v1.2.0. Real remux and, as an explicit opt-in, real A/V repair are both fully supported; safe defaults remain unchanged.
+Current release line: v1.2.1. Real remux and, as an explicit opt-in, real A/V repair are both fully supported; safe defaults remain unchanged.
 
 ## Audio/video repair (v1.2.0)
 
@@ -33,6 +33,8 @@ Every A/V repair reuses the same transactional pipeline as remux repair: the can
 Every audio track on a file is classified and planned independently, and a track's classification is always visible even when it isn't auto-repaired. **Automatic repair only executes when exactly one track on a file needs it.** When two or more tracks on the same file would each need an automatic repair, every one of them falls back to `ManualOnly`: end-to-end testing found that chaining a stream-copy retime with a following per-stream re-encode on the same file can introduce a small (tens-of-milliseconds) collateral timestamp shift on completely untouched streams, including video, which this release cannot yet prove safe. This is a deliberate, tested scope decision, not an oversight; multi-track automatic repair may be revisited in a future release.
 
 An opt-in `DeleteBackupAfterSuccessfulValidation` removes the per-file backup, but strictly only after full post-replacement validation has passed — never after a failed repair, and never after a rollback.
+
+**Packet evidence confirms metadata; it never overrides it (v1.2.1).** The optional packet probe only samples two small windows and cannot see the real end of a stream that ends before the container duration, so a sampled drift can be much smaller than the real stream-level difference. v1.2.1 therefore requires packet evidence to agree with stream metadata (0.25 s for start offsets, 0.5 s for end offset/drift); any disagreement, or evidence that straddles `MaxAutoRepairDurationDeltaSeconds`, is `Ambiguous` and `ManualOnly`, and a sampled packet value can never pull a larger anomaly under an auto-repair limit. `AudioPad`/`AudioTrim` use the stream-level metadata delta as the amount.
 
 All of this is disabled by default: `EnableAudioVideoRepair=false` means classification-only, exactly like v1.1.x.
 

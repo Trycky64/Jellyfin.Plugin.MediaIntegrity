@@ -1,5 +1,43 @@
 # Changelog
 
+## 1.2.1
+
+- Fix: a partial packet-level sample could hide a large audio/video
+  divergence and make it look repairable. The optional packet timeline probe
+  samples only two small windows, and its tail window is anchored on a seek
+  target rather than on each stream's real end. When one stream ends before
+  the container duration (or keyframes are sparse), the other stream's real
+  end is not in the window, so the packet-measured drift could be a few
+  seconds while the stream-level duration delta was much larger. v1.2.0 used
+  the packet drift alone, so a stream-level delta of about +10.8 s with a
+  sampled drift of about +1.9 s (limit `MaxAutoRepairDurationDeltaSeconds`
+  2.0) was classified `AudioEndsLate` and planned as an `AudioTrim` of the
+  smaller value. The candidate was then rejected by post-repair validation
+  (nothing was modified), but the plan should never have been created.
+- v1.2.1 treats packet evidence as a confirmation of stream metadata, never as
+  an authority allowed to reduce it. A single shared rule
+  (`AvEvidenceConsistency`) compares the metadata start offset, end offset and
+  drift with the packet evidence. Tolerances are the classifier's own signal
+  floors: 0.25 s for start offsets, 0.5 s for end offset / drift. Beyond them
+  (including opposite directions) the pair is `Ambiguous` and always
+  `ManualOnly`. Evidence that agrees within tolerance but falls on both sides
+  of `MaxAutoRepairDurationDeltaSeconds`, or a packet drift the metadata does
+  not corroborate, is also `Ambiguous`. The smaller of the two magnitudes is
+  never used, and the planner re-applies the same rule as a second guard.
+- `AudioPad`/`AudioTrim` now use the stream-level metadata delta as the amount
+  (the value post-repair validation re-measures) instead of the sampled packet
+  drift, and check the configured limit against the larger of the two.
+- The metadata "duration" of a stream is a length for some muxers and an end
+  timestamp for others (for example an ffmpeg-written Matroska `DURATION` tag on
+  a stream with a start offset). When the start offset is meaningful, either
+  reading may agree with the packets, so `ConstantOffset` files keep working; a
+  file that starts in sync has a single reading.
+- No change to `TimestampShift`, `AudioTimeStretch`, multi-track `ManualOnly`,
+  the never-re-encode-video rule, source-codec preservation for
+  `AudioPad`/`AudioTrim`, post-repair validation, rollback or `DryRun`.
+- Tests: new classifier/planner regression tests, plus a synthetic end-to-end
+  case that reproduces the partial tail window with real FFmpeg/ffprobe.
+
 ## 1.2.0
 
 - Classify audio/video timeline anomalies (`ConstantOffset`, `DurationMismatch`,
