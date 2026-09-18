@@ -397,6 +397,52 @@ public sealed class AvRepairClassifierTests
         Assert.Equal(10.8, result.MetadataDriftSeconds);
     }
 
+    [Fact]
+    public void ConfirmedLargeEndMismatch_TinyRatio_ClassifiesProgressiveDriftButNeverAutoStretches()
+    {
+        // Metadata and packets agree on +10.8s over a long video (ratio ~0.14% < 2%),
+        // limit 2.0s, AllowAudioReencode=true: never AudioTimeStretch.
+        var evidence = Evidence(0, 0, startOffset: 0, endOffset: 10.8);
+        var diagnosis = Classify(Video(0, 7700), Audio(0, 7710.8), evidence);
+        Assert.Equal(AvRepairClassification.ProgressiveDrift, diagnosis.Classification);
+        var configuration = PlanningConfiguration();
+        Assert.True(10.8 / 7700 < configuration.MaxAutoRepairDriftRatio);
+        var plan = AvRepairPlanner.Plan(diagnosis, configuration);
+        Assert.Equal(AvRepairStrategy.ManualOnly, plan.Strategy);
+        Assert.Null(plan.AtempoFactor);
+        Assert.False(plan.IsAutoRepairEligible);
+    }
+
+    [Fact]
+    public void ConfirmedLargeDriftWithStartOffset_TinyRatio_NeverAutoStretches()
+    {
+        var evidence = Evidence(0, 0, startOffset: 1.0, endOffset: 11.8);
+        var diagnosis = Classify(Video(0, 7700, videoStart: 0), Audio(0, 7710.8, audioStart: 1.0), evidence);
+        Assert.Equal(AvRepairClassification.ProgressiveDrift, diagnosis.Classification);
+        Assert.Equal(AvRepairStrategy.ManualOnly, AvRepairPlanner.Plan(diagnosis, PlanningConfiguration()).Strategy);
+    }
+
+    [Fact]
+    public void ConfirmedSmallDriftWithStartOffset_StaysAutoStretchable()
+    {
+        // Start offset compounds from 1.0s to 2.5s (drift +1.5s <= 2.0s limit), ratio 0.03%.
+        var evidence = Evidence(0, 0, startOffset: 1.0, endOffset: 2.5);
+        var diagnosis = Classify(Video(0, 5000, videoStart: 0), Audio(0, 5001.5, audioStart: 1.0), evidence);
+        Assert.Equal(AvRepairClassification.ProgressiveDrift, diagnosis.Classification);
+        var plan = AvRepairPlanner.Plan(diagnosis, PlanningConfiguration());
+        Assert.Equal(AvRepairStrategy.AudioTimeStretch, plan.Strategy);
+        Assert.True(plan.IsAutoRepairEligible);
+    }
+
+    [Fact]
+    public void ConfirmedSmallDriftWithStartOffset_WithoutReencodeAllowed_IsManualOnly()
+    {
+        var evidence = Evidence(0, 0, startOffset: 1.0, endOffset: 2.5);
+        var diagnosis = Classify(Video(0, 5000, videoStart: 0), Audio(0, 5001.5, audioStart: 1.0), evidence);
+        var configuration = new PluginConfiguration { EnableAudioVideoRepair = true, AllowAudioReencode = false };
+        Assert.Equal(AvRepairStrategy.ManualOnly, AvRepairPlanner.Plan(diagnosis, configuration).Strategy);
+    }
+
     private static PluginConfiguration PlanningConfiguration() =>
         new() { EnableAudioVideoRepair = true, AllowAudioReencode = true };
 

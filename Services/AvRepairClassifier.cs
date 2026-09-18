@@ -17,7 +17,9 @@ namespace Jellyfin.Plugin.MediaIntegrity.Services;
 /// while the file starts in sync is treated as a single-sided end mismatch
 /// (safely pad/trim-able); a larger or start-offset-compounded evolution is
 /// treated as a genuine progressive drift (only correctable, if at all, with
-/// an opt-in proportional audio time-stretch).
+/// an opt-in proportional audio time-stretch, and only when the absolute
+/// divergence is also within MaxAutoRepairDurationDeltaSeconds; that policy
+/// gate lives in <see cref="AvRepairPlanner"/>).
 ///
 /// Packet evidence is a confirmation of the stream-level metadata, never an
 /// authority over it: the tail window is anchored on a seek target and can

@@ -61,7 +61,7 @@ public sealed class AvRepairPlannerTests
     {
         var configuration = Enabled();
         configuration.AllowAudioReencode = true;
-        var diagnosis = ProgressiveDriftDiagnosis(videoDuration: 5000, drift: 3.0, confidence: 0.9);
+        var diagnosis = ProgressiveDriftDiagnosis(videoDuration: 5000, drift: 1.5, confidence: 0.9);
         var plan = AvRepairPlanner.Plan(diagnosis, configuration);
         Assert.Equal(AvRepairStrategy.AudioTimeStretch, plan.Strategy);
         Assert.True(plan.RequiresAudioReencode);
@@ -74,7 +74,7 @@ public sealed class AvRepairPlannerTests
     {
         var configuration = Enabled();
         configuration.AllowAudioReencode = false;
-        var diagnosis = ProgressiveDriftDiagnosis(videoDuration: 5000, drift: 3.0, confidence: 0.9);
+        var diagnosis = ProgressiveDriftDiagnosis(videoDuration: 5000, drift: 1.5, confidence: 0.9);
         var plan = AvRepairPlanner.Plan(diagnosis, configuration);
         Assert.Equal(AvRepairStrategy.ManualOnly, plan.Strategy);
     }
@@ -85,7 +85,7 @@ public sealed class AvRepairPlannerTests
         var configuration = Enabled();
         configuration.AllowAudioReencode = true;
         configuration.MaxAutoRepairDriftRatio = 0.0001;
-        var diagnosis = ProgressiveDriftDiagnosis(videoDuration: 5000, drift: 3.0, confidence: 0.9);
+        var diagnosis = ProgressiveDriftDiagnosis(videoDuration: 5000, drift: 1.5, confidence: 0.9);
         var plan = AvRepairPlanner.Plan(diagnosis, configuration);
         Assert.Equal(AvRepairStrategy.ManualOnly, plan.Strategy);
     }
@@ -326,11 +326,83 @@ public sealed class AvRepairPlannerTests
     {
         var configuration = Enabled();
         configuration.AllowAudioReencode = true;
-        configuration.MaxAutoRepairDriftRatio = 0.001;
-        // metadata drift 10.8s / 5000s = 0.00216 > 0.001; packet drift 3.0s would pass.
-        var diagnosis = ProgressiveDriftDiagnosis(videoDuration: 5000, drift: 10.8, confidence: 0.9);
-        diagnosis.PacketEvidence = diagnosis.PacketEvidence! with { EndOffsetSeconds = 10.5 };
+        configuration.MaxAutoRepairDriftRatio = 0.0018;
+        // metadata drift 1.9s / 1000s = 0.0019 > 0.0018; the packet drift 1.5s (0.0015) alone would pass.
+        var diagnosis = ProgressiveDriftDiagnosis(videoDuration: 1000, drift: 1.9, confidence: 0.9);
+        diagnosis.PacketEvidence = diagnosis.PacketEvidence! with { EndOffsetSeconds = 1.5 };
         Assert.Equal(AvRepairStrategy.ManualOnly, AvRepairPlanner.Plan(diagnosis, configuration).Strategy);
+    }
+
+    // ---- v1.2.1: a relative limit never bypasses the absolute limit ----
+
+    [Fact]
+    public void ProgressiveDrift_BoundedAbsoluteDeltaAndAcceptableRatio_StaysAutoEligible()
+    {
+        // Case A
+        var plan = Plan(ProgressiveDriftDiagnosis(videoDuration: 5000, drift: 1.5, confidence: 0.9));
+        Assert.Equal(AvRepairStrategy.AudioTimeStretch, plan.Strategy);
+        Assert.True(plan.IsAutoRepairEligible);
+        Assert.True(plan.RequiresAudioReencode);
+        Assert.NotNull(plan.AtempoFactor);
+    }
+
+    [Theory]
+    [InlineData(2.5, 5000)]
+    [InlineData(10.8, 5000)]
+    [InlineData(10.8, 7709.5)]
+    [InlineData(-10.8, 7709.5)]
+    public void ProgressiveDrift_AbsoluteDeltaAboveLimit_IsManualOnlyEvenWithTinyRatio(double drift, double videoDuration)
+    {
+        // Case B: the ratio (< 0.2%) is far below MaxAutoRepairDriftRatio (2%).
+        var configuration = Enabled();
+        configuration.AllowAudioReencode = true;
+        Assert.True(Math.Abs(drift) / videoDuration < configuration.MaxAutoRepairDriftRatio);
+        var plan = AvRepairPlanner.Plan(
+            ProgressiveDriftDiagnosis(videoDuration, drift, confidence: 0.9), configuration);
+        Assert.Equal(AvRepairStrategy.ManualOnly, plan.Strategy);
+        Assert.Null(plan.AtempoFactor);
+        Assert.False(plan.IsAutoRepairEligible);
+        Assert.Contains("absolute", plan.Reason);
+    }
+
+    [Fact]
+    public void ProgressiveDrift_AcceptableAbsoluteDeltaButRatioTooHigh_IsManualOnly()
+    {
+        // Case C: 1.5s over 50s = 3% > 2%.
+        var plan = Plan(ProgressiveDriftDiagnosis(videoDuration: 50, drift: 1.5, confidence: 0.9));
+        Assert.Equal(AvRepairStrategy.ManualOnly, plan.Strategy);
+        Assert.Contains("MaxAutoRepairDriftRatio", plan.Reason);
+    }
+
+    [Theory]
+    [InlineData(1.999, true)]
+    [InlineData(2.0, true)]
+    [InlineData(2.001, false)]
+    public void ProgressiveDrift_AbsoluteLimitBoundary_IsInclusive(double drift, bool eligible)
+    {
+        // Case D: same inclusive boundary as AudioPad/AudioTrim.
+        var plan = Plan(ProgressiveDriftDiagnosis(videoDuration: 5000, drift, confidence: 0.9));
+        Assert.Equal(eligible, plan.IsAutoRepairEligible);
+        Assert.Equal(eligible ? AvRepairStrategy.AudioTimeStretch : AvRepairStrategy.ManualOnly, plan.Strategy);
+    }
+
+    [Fact]
+    public void ProgressiveDrift_AbsoluteLimitFollowsConfiguration()
+    {
+        var configuration = Enabled();
+        configuration.AllowAudioReencode = true;
+        configuration.MaxAutoRepairDurationDeltaSeconds = 12.0;
+        var plan = AvRepairPlanner.Plan(
+            ProgressiveDriftDiagnosis(videoDuration: 7000, drift: 10.8, confidence: 0.9), configuration);
+        Assert.Equal(AvRepairStrategy.AudioTimeStretch, plan.Strategy);
+    }
+
+    [Fact]
+    public void ProgressiveDrift_PacketDriftAboveLimitWhileMetadataBelow_IsManualOnly()
+    {
+        var diagnosis = ProgressiveDriftDiagnosis(videoDuration: 5000, drift: 1.8, confidence: 0.9);
+        diagnosis.PacketEvidence = diagnosis.PacketEvidence! with { EndOffsetSeconds = 2.2 };
+        Assert.Equal(AvRepairStrategy.ManualOnly, Plan(diagnosis).Strategy);
     }
 
     private static AvRepairPlan Plan(AvRepairDiagnosis diagnosis)

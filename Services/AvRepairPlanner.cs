@@ -162,6 +162,19 @@ public static class AvRepairPlanner
 
         var drift = AvEvidenceConsistency.Reconcile(diagnosis).MetadataDriftSeconds;
         var gateDrift = Math.Max(Math.Abs(drift), Math.Abs(diagnosis.PacketEvidence?.Drift ?? 0));
+
+        // A relative limit can never bypass the absolute one: a large absolute
+        // divergence stays ManualOnly however small its ratio to a long video
+        // is (10.8 s over a two-hour film is ~0.15%). Same limit and same
+        // inclusive boundary as AudioPad/AudioTrim.
+        if (gateDrift > configuration.MaxAutoRepairDurationDeltaSeconds)
+        {
+            return ManualOnly(plan,
+                $"Drift {Format(gateDrift)}s exceeds the absolute MaxAutoRepairDurationDeltaSeconds " +
+                $"({Format(configuration.MaxAutoRepairDurationDeltaSeconds)}s); a small relative ratio " +
+                "never bypasses the absolute limit.");
+        }
+
         var driftRatio = gateDrift / diagnosis.VideoDurationSeconds;
 
         if (driftRatio > configuration.MaxAutoRepairDriftRatio)

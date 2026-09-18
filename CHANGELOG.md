@@ -32,7 +32,14 @@
   a stream with a start offset). When the start offset is meaningful, either
   reading may agree with the packets, so `ConstantOffset` files keep working; a
   file that starts in sync has a single reading.
-- No change to `TimestampShift`, `AudioTimeStretch`, multi-track `ManualOnly`,
+- `AudioTimeStretch` now also requires the absolute divergence (the larger of
+  the metadata and packet drifts) to be within
+  `MaxAutoRepairDurationDeltaSeconds`, in addition to `AllowAudioReencode` and
+  `MaxAutoRepairDriftRatio`. A relative limit never bypasses the absolute one:
+  a consistent +10.8 s divergence on a long film has a tiny ratio but is
+  `ManualOnly`. In practice `AudioTimeStretch` stays available only for small
+  drifts that compound a meaningful start offset.
+- No change to `TimestampShift`, multi-track `ManualOnly`,
   the never-re-encode-video rule, source-codec preservation for
   `AudioPad`/`AudioTrim`, post-repair validation, rollback or `DryRun`.
 - Tests: new classifier/planner regression tests, plus a synthetic end-to-end
