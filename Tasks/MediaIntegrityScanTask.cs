@@ -121,22 +121,39 @@ public sealed class MediaIntegrityScanTask : IScheduledTask
                         cancellationToken,
                         configuration.EnableAudioVideoSyncCheck);
 
+                IReadOnlyDictionary<(int VideoIndex, int AudioIndex), AvPacketEvidence>? packetEvidence = null;
+
                 if (configuration.EnableAudioVideoSyncCheck && configuration.EnablePacketTimelineAnalysis)
                 {
-                    var packetIssues = await PacketTimelineAnalyzer.AnalyzeAsync(
-                        path, probeResult.ScanResult, configuration.ProbeTimeoutSeconds, cancellationToken);
+                    var packets = await PacketTimelineAnalyzer.FetchPacketsAsync(
+                        path, probeResult.ScanResult.DurationSeconds ?? 0,
+                        configuration.ProbeTimeoutSeconds, cancellationToken);
+                    var packetIssues = PacketTimelineAnalyzer.AnalyzeSamples(probeResult.ScanResult, packets);
                     probeResult.ScanResult.Issues.AddRange(packetIssues);
                     if (packetIssues.Count > 0 && probeResult.ScanResult.Status == MediaIntegrityStatus.Ok)
                     {
                         probeResult.ScanResult.Status = MediaIntegrityStatus.Warning;
                     }
+
+                    packetEvidence = PacketTimelineAnalyzer.ComputeEvidence(probeResult.ScanResult, packets);
                 }
+
+                var avPlans = configuration.EnableAudioVideoSyncCheck
+                    ? AvRepairPlanner.PlanMedia(
+                        AvRepairClassifier.ClassifyAll(probeResult.ScanResult, packetEvidence, configuration),
+                        configuration)
+                    : [];
+
+                avCounters.AddAvRepairPlans(avPlans);
 
                 ProcessScanResult(
                     probeResult.ScanResult,
                     summary,
                     queue,
-                    avCounters);
+                    avCounters,
+                    configuration.EnableAudioVideoRepair
+                        ? avPlans.Where(static plan => plan.IsAutoRepairEligible).ToList()
+                        : []);
 
                 LogScanResult(
                     probeResult.ScanResult);
@@ -212,10 +229,13 @@ public sealed class MediaIntegrityScanTask : IScheduledTask
         MediaScanResult scanResult,
         RepairQueueSummary summary,
         RepairQueue queue,
-        AudioVideoScanCounters avCounters)
+        AudioVideoScanCounters avCounters,
+        IReadOnlyList<AvRepairPlan> eligibleAvPlans)
     {
         summary.Checked++;
         avCounters.Add(scanResult);
+
+        RepairQueueItem? queuedItem = null;
 
         switch (scanResult.Status)
         {
@@ -230,8 +250,8 @@ public sealed class MediaIntegrityScanTask : IScheduledTask
             case MediaIntegrityStatus.RemuxRecommended:
                 summary.Repairable++;
 
-                queue.Files.Add(
-                    CreateQueueItem(scanResult));
+                queuedItem = CreateQueueItem(scanResult);
+                queue.Files.Add(queuedItem);
 
                 break;
 
@@ -241,8 +261,8 @@ public sealed class MediaIntegrityScanTask : IScheduledTask
                 if (IsSafelyQueueableCorruption(
                         scanResult))
                 {
-                    queue.Files.Add(
-                        CreateQueueItem(scanResult));
+                    queuedItem = CreateQueueItem(scanResult);
+                    queue.Files.Add(queuedItem);
                 }
 
                 break;
@@ -254,6 +274,23 @@ public sealed class MediaIntegrityScanTask : IScheduledTask
             default:
                 summary.Warning++;
                 break;
+        }
+
+        if (eligibleAvPlans.Count == 0)
+        {
+            return;
+        }
+
+        // A file may reach here purely because of an A/V anomaly (status
+        // Warning, not otherwise queued) or already be queued for an
+        // unrelated remux/corruption reason. Either way, attach the
+        // auto-repair-eligible plans to a single queue item per file.
+        queuedItem ??= CreateQueueItem(scanResult);
+        queuedItem.AvRepairPlans = eligibleAvPlans.ToList();
+
+        if (!queue.Files.Contains(queuedItem))
+        {
+            queue.Files.Add(queuedItem);
         }
     }
 

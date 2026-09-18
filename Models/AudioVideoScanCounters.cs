@@ -15,6 +15,41 @@ public sealed class AudioVideoScanCounters
     public int SuspectedDrifts { get; private set; }
     public int IncompleteTimelineData { get; private set; }
 
+    public int AvClassifiedConstantOffset { get; private set; }
+    public int AvClassifiedDurationMismatch { get; private set; }
+    public int AvClassifiedProgressiveDrift { get; private set; }
+    public int AvPlannedManualOnly { get; private set; }
+    public int AvQueuedForRepair { get; private set; }
+
+    /// <summary>Tallies classification and planning results computed during a scan. Never repairs anything.</summary>
+    public void AddAvRepairPlans(IReadOnlyList<AvRepairPlan> plans)
+    {
+        foreach (var plan in plans)
+        {
+            switch (plan.Classification)
+            {
+                case AvRepairClassification.ConstantOffset:
+                    AvClassifiedConstantOffset++;
+                    break;
+                case AvRepairClassification.DurationMismatch:
+                    AvClassifiedDurationMismatch++;
+                    break;
+                case AvRepairClassification.ProgressiveDrift:
+                    AvClassifiedProgressiveDrift++;
+                    break;
+            }
+
+            if (plan.Strategy == AvRepairStrategy.ManualOnly)
+            {
+                AvPlannedManualOnly++;
+            }
+            else if (plan.IsAutoRepairEligible)
+            {
+                AvQueuedForRepair++;
+            }
+        }
+    }
+
     public void Add(MediaScanResult result)
     {
         var avIssues = result.Issues.Where(static issue => issue.Code.StartsWith("AudioVideo", StringComparison.Ordinal) || issue.Code == "TimelineDataIncomplete").ToList();

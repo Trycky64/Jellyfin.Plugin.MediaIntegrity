@@ -219,7 +219,8 @@ public sealed class MediaReplacementServiceTests : IDisposable
         public Task<MediaValidationResult> ValidateAsync(
             string sourcePath,
             string outputPath,
-            CancellationToken cancellationToken) =>
+            CancellationToken cancellationToken,
+            IReadOnlySet<int>? intentionallyRetimedStreamIndexes = null) =>
             Task.FromResult(new MediaValidationResult { Success = true });
     }
 
@@ -228,7 +229,8 @@ public sealed class MediaReplacementServiceTests : IDisposable
         public Task<MediaValidationResult> ValidateAsync(
             string sourcePath,
             string outputPath,
-            CancellationToken cancellationToken) =>
+            CancellationToken cancellationToken,
+            IReadOnlySet<int>? intentionallyRetimedStreamIndexes = null) =>
             Task.FromResult(new MediaValidationResult
             {
                 Success = false,

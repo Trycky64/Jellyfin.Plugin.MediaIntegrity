@@ -9,6 +9,20 @@ using Microsoft.Extensions.Logging.Abstractions;
 var detector = new MediaIssueDetector();
 var probe = new MediaProbeService(NullLogger<MediaProbeService>.Instance, detector);
 var report = new Dictionary<string, object>();
+if (args.Length >= 2 && args[0] == "--real-library-scan")
+{
+    var scanReport = await PiValidation.RealLibraryDryRun.RunAsync(args.Skip(1).ToArray());
+    Console.WriteLine(JsonSerializer.Serialize(scanReport, new JsonSerializerOptions { WriteIndented = true }));
+    return;
+}
+
+if (args.Length == 1 && args[0] == "--av-repair-e2e")
+{
+    var avReport = await PiValidation.AvRepairEndToEnd.RunAsync();
+    Console.WriteLine(JsonSerializer.Serialize(avReport, new JsonSerializerOptions { WriteIndented = true }));
+    return;
+}
+
 if (args.Length == 2 && args[0] == "--packet-control")
 {
     var scan = new Jellyfin.Plugin.MediaIntegrity.Models.MediaScanResult { DurationSeconds = 4 };

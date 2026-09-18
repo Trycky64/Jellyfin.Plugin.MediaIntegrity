@@ -209,5 +209,3 @@ public sealed class StreamTimelineValidatorTests
     private static MediaStreamInfo Other(int index, string type, string codec) =>
         new() { Index = index, CodecType = type, CodecName = codec };
 }
-
-

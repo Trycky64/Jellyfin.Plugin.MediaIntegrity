@@ -27,6 +27,12 @@ public sealed record LastScanStats
     public int TimelineDataIncomplete { get; init; }
     public List<AudioVideoScanDiagnostic> AudioVideoDiagnostics { get; init; } = [];
 
+    public int AvClassifiedConstantOffset { get; init; }
+    public int AvClassifiedDurationMismatch { get; init; }
+    public int AvClassifiedProgressiveDrift { get; init; }
+    public int AvPlannedManualOnly { get; init; }
+    public int AvQueuedForRepair { get; init; }
+
     public static LastScanStats FromQueue(RepairQueue queue, AudioVideoScanCounters? av = null) => new()
     {
         LastScanDate = queue.GeneratedAt,
@@ -42,6 +48,11 @@ public sealed record LastScanStats
         AudioVideoEndMismatches = av?.EndMismatches ?? 0,
         AudioVideoSuspectedDrifts = av?.SuspectedDrifts ?? 0,
         TimelineDataIncomplete = av?.IncompleteTimelineData ?? 0,
-        AudioVideoDiagnostics = av?.Diagnostics.ToList() ?? []
+        AudioVideoDiagnostics = av?.Diagnostics.ToList() ?? [],
+        AvClassifiedConstantOffset = av?.AvClassifiedConstantOffset ?? 0,
+        AvClassifiedDurationMismatch = av?.AvClassifiedDurationMismatch ?? 0,
+        AvClassifiedProgressiveDrift = av?.AvClassifiedProgressiveDrift ?? 0,
+        AvPlannedManualOnly = av?.AvPlannedManualOnly ?? 0,
+        AvQueuedForRepair = av?.AvQueuedForRepair ?? 0
     };
 }

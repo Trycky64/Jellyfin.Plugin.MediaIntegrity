@@ -65,4 +65,63 @@ public sealed class PluginConfiguration : BasePluginConfiguration
     /// audio or video stream.
     /// </summary>
     public double StreamStartTimeToleranceSeconds { get; set; } = 0.01;
+
+    // ---------------------------------------------------------------
+    // Audio/video repair (v1.2.0). All destructive behavior is opt-in;
+    // defaults never modify a media file.
+    // ---------------------------------------------------------------
+
+    /// <summary>Master switch for A/V repair. When false, anomalies are only classified, never repaired.</summary>
+    public bool EnableAudioVideoRepair { get; set; } = false;
+
+    /// <summary>
+    /// Allows strategies that re-encode an audio track
+    /// (<see cref="Models.AvRepairStrategy.AudioTimeStretch"/>). Video is
+    /// never re-encoded by any strategy regardless of this setting.
+    /// </summary>
+    public bool AllowAudioReencode { get; set; } = false;
+
+    /// <summary>Maximum number of A/V repairs performed by one non-dry-run task execution.</summary>
+    public int MaxAudioVideoRepairsPerRun { get; set; } = 1;
+
+    /// <summary>
+    /// Maximum absolute constant offset, in seconds, eligible for automatic
+    /// <see cref="Models.AvRepairStrategy.TimestampShift"/> repair. Larger
+    /// offsets are always classified <see cref="Models.AvRepairClassification.UnsafeToAutoRepair"/>.
+    /// </summary>
+    public double MaxAutoRepairOffsetSeconds { get; set; } = 5.0;
+
+    /// <summary>
+    /// Maximum absolute audio/video duration delta, in seconds, eligible for
+    /// automatic <see cref="Models.AvRepairStrategy.AudioPad"/> or
+    /// <see cref="Models.AvRepairStrategy.AudioTrim"/> repair.
+    /// </summary>
+    public double MaxAutoRepairDurationDeltaSeconds { get; set; } = 2.0;
+
+    /// <summary>
+    /// Maximum absolute progressive drift, expressed as a fraction of media
+    /// duration, eligible for automatic
+    /// <see cref="Models.AvRepairStrategy.AudioTimeStretch"/> repair.
+    /// </summary>
+    public double MaxAutoRepairDriftRatio { get; set; } = 0.02;
+
+    /// <summary>Minimum classification confidence (0.0-1.0) required for a plan to be auto-repair eligible.</summary>
+    public double MinRepairConfidence { get; set; } = 0.75;
+
+    /// <summary>
+    /// When true, the backup created for a successful A/V repair is deleted
+    /// once post-replacement validation has fully passed. Never deletes a
+    /// backup after a failed repair or a rollback.
+    /// </summary>
+    public bool DeleteBackupAfterSuccessfulValidation { get; set; } = false;
+
+    /// <summary>
+    /// FFmpeg audio encoder used whenever a strategy must re-encode an audio
+    /// track (<see cref="Models.AvRepairStrategy.AudioTimeStretch"/>,
+    /// <see cref="Models.AvRepairStrategy.AudioPad"/>,
+    /// <see cref="Models.AvRepairStrategy.AudioTrim"/>). A widely compatible,
+    /// lossy-but-transparent default; never used unless one of those
+    /// strategies is actually selected.
+    /// </summary>
+    public string AudioReencodeCodec { get; set; } = "aac";
 }

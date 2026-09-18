@@ -8,12 +8,39 @@ These diagnostics describe the source media only. They never trigger an automati
 
 Detect container and stream issues in a Jellyfin library and repair eligible files with lossless FFmpeg stream copy.
 
-Current release line: v1.1.1. Real remux is fully supported as an explicit opt-in; safe defaults remain unchanged.
+Current release line: v1.2.0. Real remux and, as an explicit opt-in, real A/V repair are both fully supported; safe defaults remain unchanged.
+
+## Audio/video repair (v1.2.0)
+
+Starting in v1.2.0, every A/V timeline anomaly reported by the diagnostics above is also **classified** into one of: `ConstantOffset`, `DurationMismatch`, `ProgressiveDrift`, `AudioEndsEarly`, `AudioEndsLate`, `TimelineMetadataOnly`, `Ambiguous`, or `UnsafeToAutoRepair`. Classification is always computed and shown in scan statistics; it never modifies a file by itself.
+
+A classification only becomes an actual repair when **all** of the following are true: `EnableAudioVideoRepair=true`, the classification's confidence meets `MinRepairConfidence`, and the anomaly's magnitude is within the configured `MaxAutoRepairOffsetSeconds` / `MaxAutoRepairDurationDeltaSeconds` / `MaxAutoRepairDriftRatio` limits. Anything else — including every anomaly larger than a hard, non-configurable 30-second safety ceiling, and every anomaly with a discontinuous packet timeline — is `UnsafeToAutoRepair` or `Ambiguous` and always requires manual review. **A large duration mismatch is never assumed to be damage**: a long silent intro/outro or a deliberately shorter track is left for a human to decide.
+
+Repair strategies, run by the independent **A/V Repair** scheduled task:
+
+| Classification | Strategy | Re-encodes | Requires |
+| --- | --- | --- | --- |
+| ConstantOffset | TimestampShift | Nothing (pure stream copy) | `EnableAudioVideoRepair` |
+| ProgressiveDrift | AudioTimeStretch (`atempo`) | Only the targeted audio track | `EnableAudioVideoRepair` + `AllowAudioReencode` |
+| AudioEndsEarly | AudioPad (`apad`) | Only the targeted audio track | `EnableAudioVideoRepair` + `AllowAudioReencode` |
+| AudioEndsLate | AudioTrim (`atrim`) | Only the targeted audio track | `EnableAudioVideoRepair` + `AllowAudioReencode` |
+| everything else | ManualOnly | Nothing (no repair is attempted) | — |
+
+**Video is never re-encoded by any strategy, under any configuration.** `AudioPad`/`AudioTrim` re-encode the one targeted audio track even though the edit is a clean silence pad or edge trim, because FFmpeg's `apad`/`atrim` filters require decoding that track; this is why they are gated by `AllowAudioReencode` exactly like time-stretch, not treated as "free" like a stream copy.
+
+Every A/V repair reuses the same transactional pipeline as remux repair: the candidate is built outside the source tree, probed and compared against the source (stream identity, timeline tolerance, chapters, full packet-copy pass), re-classified to confirm the targeted anomaly is actually gone, backed up, replaced, and validated again after the swap — with automatic rollback to the verified backup on any failure.
+
+Every audio track on a file is classified and planned independently, and a track's classification is always visible even when it isn't auto-repaired. **Automatic repair only executes when exactly one track on a file needs it.** When two or more tracks on the same file would each need an automatic repair, every one of them falls back to `ManualOnly`: end-to-end testing found that chaining a stream-copy retime with a following per-stream re-encode on the same file can introduce a small (tens-of-milliseconds) collateral timestamp shift on completely untouched streams, including video, which this release cannot yet prove safe. This is a deliberate, tested scope decision, not an oversight; multi-track automatic repair may be revisited in a future release.
+
+An opt-in `DeleteBackupAfterSuccessfulValidation` removes the per-file backup, but strictly only after full post-replacement validation has passed — never after a failed repair, and never after a rollback.
+
+All of this is disabled by default: `EnableAudioVideoRepair=false` means classification-only, exactly like v1.1.x.
 
 ## Features
 
-- **Media Integrity Scan**: inspect supported library files with ffprobe, classify Healthy / Warning / RemuxRecommended / Corrupted / Unreadable, and persist a repair queue.
+- **Media Integrity Scan**: inspect supported library files with ffprobe, classify Healthy / Warning / RemuxRecommended / Corrupted / Unreadable, classify any A/V timeline anomaly, and persist a repair queue.
 - **Media Remux Repair**: remux every stream with `-map 0 -c copy`, validate stream identity, per-stream timeline, chapters and a full packet-copy pass, then optionally replace through the writable mirror.
+- **A/V Repair** (v1.2.0, opt-in): repair the safest, most-bounded A/V anomalies (constant offset, bounded end mismatch, small progressive drift) with `TimestampShift`, `AudioPad`, `AudioTrim` or `AudioTimeStretch`. Video is never re-encoded by any strategy.
 - Dry-run enabled by default; at most one real repair per task run.
 - Transactional backups, SHA-256 recovery manifests, collision-safe names and rollback on detected replacement failure.
 - Playback checks before remux, before replacement preparation and immediately before the final swap.
@@ -76,6 +103,15 @@ Never make `/media` writable. Create the backup and cache directories before sta
 | DurationToleranceSeconds | 2 | Maximum source/output duration difference |
 | StreamDurationToleranceSeconds | 0.05 | Maximum source-to-candidate duration change for each audio/video stream |
 | StreamStartTimeToleranceSeconds | 0.01 | Maximum source-to-candidate start-time change for each audio/video stream |
+| EnableAudioVideoRepair | false | Master switch for A/V repair; classification always runs regardless of this setting |
+| AllowAudioReencode | false | Required for AudioTimeStretch, AudioPad and AudioTrim; video is never re-encoded regardless |
+| MaxAudioVideoRepairsPerRun | 1 | Maximum real A/V repair candidates per run |
+| MaxAutoRepairOffsetSeconds | 5.0 | Largest constant offset eligible for automatic TimestampShift |
+| MaxAutoRepairDurationDeltaSeconds | 2.0 | Largest bounded duration delta eligible for automatic AudioPad/AudioTrim |
+| MaxAutoRepairDriftRatio | 0.02 | Largest packet-confirmed drift, as a fraction of duration, eligible for automatic AudioTimeStretch |
+| MinRepairConfidence | 0.75 | Minimum classification confidence required for auto-repair eligibility |
+| AudioReencodeCodec | aac | FFmpeg encoder used only when a strategy must re-encode an audio track |
+| DeleteBackupAfterSuccessfulValidation | false | Deletes the per-file backup only after full post-replacement validation succeeds |
 
 Supported video extensions: MP4, M4V, MKV, WebM, MOV, AVI, TS, M2TS, MTS, MPG, MPEG.
 Supported audio extensions: M4A, MP3, FLAC, OGG, OPUS, AAC. Extension support does not guarantee that every codec/container combination can be remuxed.
@@ -134,6 +170,9 @@ The plugin attempts rollback from the verified backup after a detected post-swap
 - Preservation of all metadata/attachments depends on FFmpeg container support; validation fails closed on detected incompatibility.
 - Some valid files lack stream-level timing. The repair pipeline refuses their automatic replacement rather than assuming the timing is preserved.
 - UI JavaScript and live API were tested; visual browser inspection was unavailable in the validation session.
+- A/V repair classification uses only two packet samples (start and end windows); it cannot distinguish a truly uniform drift from a bounded change concentrated at one edge except by magnitude, so classification thresholds (not audio content analysis) decide between ProgressiveDrift and AudioEndsEarly/AudioEndsLate.
+- `AudioPad`/`AudioTrim` re-encode the targeted audio track (FFmpeg filter-graph requirement); they are not literally lossless like stream-copy remux, even though the edit itself only adds silence or trims a bounded edge.
+- A/V repair intentionally never runs on more than `MaxAudioVideoRepairsPerRun` files per real task execution; do not raise it to bypass a staged rollout.
 
 ## Troubleshooting
 

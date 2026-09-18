@@ -34,7 +34,8 @@ public sealed class MediaReplacementService
         string sourcePath,
         string temporaryPath,
         CancellationToken cancellationToken,
-        Func<bool>? isMediaInUse = null)
+        Func<bool>? isMediaInUse = null,
+        IReadOnlySet<int>? intentionallyRetimedStreamIndexes = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(temporaryPath);
@@ -287,7 +288,8 @@ public sealed class MediaReplacementService
                     await _mediaValidationService.ValidateAsync(
                         source,
                         paths.RepairPath,
-                        cancellationToken);
+                        cancellationToken,
+                        intentionallyRetimedStreamIndexes);
 
                 if (!finalValidation.Success)
                 {

@@ -28,6 +28,7 @@ public sealed class PluginServiceRegistrator :
 
         serviceCollection.AddSingleton<RepairQueueService>();
         serviceCollection.AddSingleton<ScanStatisticsService>();
+        serviceCollection.AddSingleton<AvRepairStatisticsService>();
 
         serviceCollection.AddSingleton<MediaUseService>();
         serviceCollection.AddSingleton<MediaRemuxService>();
@@ -36,8 +37,10 @@ public sealed class PluginServiceRegistrator :
             static provider =>
                 provider.GetRequiredService<MediaValidationService>());
         serviceCollection.AddSingleton<MediaReplacementService>();
+        serviceCollection.AddSingleton<AvRepairExecutionService>();
 
         serviceCollection.AddSingleton<MediaIntegrityScanTask>();
         serviceCollection.AddSingleton<MediaRemuxRepairTask>();
+        serviceCollection.AddSingleton<AvRepairTask>();
     }
 }

@@ -14,9 +14,14 @@ const elements = new Map([...html.matchAll(/id="([^"]+)"/g)].map(m => [m[1], {
 }]));
 const ids = [...html.matchAll(/id="([^"]+)"/g)].map(m => m[1]);
 assert.equal(new Set(ids).size, ids.length, 'configuration IDs must be unique');
-for (const id of ['MaxRepairsPerRun', 'StreamDurationToleranceSeconds', 'StreamStartTimeToleranceSeconds']) {
+for (const id of ['MaxRepairsPerRun', 'StreamDurationToleranceSeconds', 'StreamStartTimeToleranceSeconds',
+    'MaxAudioVideoRepairsPerRun', 'MaxAutoRepairOffsetSeconds', 'MaxAutoRepairDurationDeltaSeconds',
+    'MaxAutoRepairDriftRatio', 'MinRepairConfidence', 'AudioReencodeCodec']) {
     assert.ok(elements.has(id), `missing ${id}`);
     assert.match(html, new RegExp(`for="${id}"[\\s\\S]*?id="${id}"`));
+}
+for (const id of ['EnableAudioVideoRepair', 'AllowAudioReencode', 'DeleteBackupAfterSuccessfulValidation']) {
+    assert.ok(elements.has(id), `missing ${id}`);
 }
 const config = {
     DryRun: true, MaxRepairsPerRun: 1, SourceRoot: '/media', RepairRoot: '/repair-media',
@@ -26,7 +31,10 @@ const config = {
     ValidationTimeoutSeconds: 3600, DurationToleranceSeconds: 2,
     StreamDurationToleranceSeconds: 0.05, StreamStartTimeToleranceSeconds: 0.01,
     KeepBackups: false, ValidateFullPacketPass: true, PreserveOriginalContainer: true,
-    AllowRepairOfCorrupted: false, EnableAudioVideoSyncCheck: true, EnablePacketTimelineAnalysis: false
+    AllowRepairOfCorrupted: false, EnableAudioVideoSyncCheck: true, EnablePacketTimelineAnalysis: false,
+    EnableAudioVideoRepair: false, AllowAudioReencode: false, MaxAudioVideoRepairsPerRun: 1,
+    MaxAutoRepairOffsetSeconds: 5.0, MaxAutoRepairDurationDeltaSeconds: 2.0, MaxAutoRepairDriftRatio: 0.02,
+    MinRepairConfidence: 0.75, AudioReencodeCodec: 'aac', DeleteBackupAfterSuccessfulValidation: false
 };
 let saved;
 const context = {
@@ -70,6 +78,15 @@ vm.runInNewContext(html.match(/<script[^>]*>([\s\S]*?)<\/script>/)[1], context);
     assert.equal(saved.StreamStartTimeToleranceSeconds, 0.01);
     assert.equal(saved.EnablePacketTimelineAnalysis, false);
     assert.equal(saved.EnableAudioVideoSyncCheck, true);
+    assert.equal(saved.EnableAudioVideoRepair, false);
+    assert.equal(saved.AllowAudioReencode, false);
+    assert.equal(saved.MaxAudioVideoRepairsPerRun, 1);
+    assert.equal(saved.MaxAutoRepairOffsetSeconds, 5);
+    assert.equal(saved.MaxAutoRepairDurationDeltaSeconds, 2);
+    assert.equal(saved.MaxAutoRepairDriftRatio, 0.02);
+    assert.equal(saved.MinRepairConfidence, 0.75);
+    assert.equal(saved.AudioReencodeCodec, 'aac');
+    assert.equal(saved.DeleteBackupAfterSuccessfulValidation, false);
     console.log('PASS: served page statistics, configuration loading and save handler; no JavaScript errors.');
     if (!process.argv[3]) {
         require('node:child_process').execFileSync(process.execPath,

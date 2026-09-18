@@ -28,4 +28,11 @@ public sealed class RepairQueueItem
         string.Empty;
 
     public DateTimeOffset? LastAttemptAt { get; set; }
+
+    /// <summary>
+    /// Auto-repair-eligible A/V plans for this media file, populated only
+    /// when a classified anomaly's plan is not ManualOnly/None. An empty list
+    /// means no automatic A/V repair applies, even if diagnostics exist.
+    /// </summary>
+    public List<AvRepairPlan> AvRepairPlans { get; set; } = [];
 }

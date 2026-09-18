@@ -172,6 +172,31 @@ public sealed class PluginConfigurationService
             throw new InvalidOperationException(
                 "TempRoot must not be located inside SourceRoot.");
         }
+
+        if (configuration.MaxAudioVideoRepairsPerRun <= 0)
+        {
+            throw new InvalidOperationException(
+                "MaxAudioVideoRepairsPerRun must be greater than zero.");
+        }
+
+        ValidateNonNegativeFinite(
+            configuration.MaxAutoRepairOffsetSeconds,
+            nameof(configuration.MaxAutoRepairOffsetSeconds));
+
+        ValidateNonNegativeFinite(
+            configuration.MaxAutoRepairDurationDeltaSeconds,
+            nameof(configuration.MaxAutoRepairDurationDeltaSeconds));
+
+        ValidateNonNegativeFinite(
+            configuration.MaxAutoRepairDriftRatio,
+            nameof(configuration.MaxAutoRepairDriftRatio));
+
+        if (!double.IsFinite(configuration.MinRepairConfidence)
+            || configuration.MinRepairConfidence is < 0 or > 1)
+        {
+            throw new InvalidOperationException(
+                "MinRepairConfidence must be finite and between 0 and 1.");
+        }
     }
 
     private static void ValidateAbsolutePath(

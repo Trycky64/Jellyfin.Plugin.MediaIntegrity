@@ -10,7 +10,6 @@ public interface IMediaValidationService
     Task<MediaValidationResult> ValidateAsync(
         string sourcePath,
         string outputPath,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        IReadOnlySet<int>? intentionallyRetimedStreamIndexes = null);
 }
-
-

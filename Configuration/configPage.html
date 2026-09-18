@@ -196,6 +196,189 @@
                     </div>
                 </div>
 
+                <h2>Audio/video repair</h2>
+
+                <p class="fieldDescription">
+                    Classifies audio/video timeline anomalies detected during scans and,
+                    only when explicitly enabled below, repairs the safest, most-bounded
+                    cases automatically. Video is never re-encoded by any strategy. Large
+                    or ambiguous anomalies always require manual review.
+                </p>
+
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label>
+                        <input
+                            id="EnableAudioVideoRepair"
+                            type="checkbox"
+                            is="emby-checkbox" />
+
+                        <span>Enable audio/video repair</span>
+                    </label>
+
+                    <div class="fieldDescription">
+                        <strong>Danger:</strong> when enabled, eligible A/V anomalies are
+                        queued for automatic repair, subject to every limit below and to
+                        Dry run. Disabled by default.
+                    </div>
+                </div>
+
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label>
+                        <input
+                            id="AllowAudioReencode"
+                            type="checkbox"
+                            is="emby-checkbox" />
+
+                        <span>Allow audio re-encode</span>
+                    </label>
+
+                    <div class="fieldDescription">
+                        <strong>Danger:</strong> required for progressive-drift correction
+                        (audio time-stretch) and for bounded end-of-track pad/trim
+                        repairs. Video is never re-encoded regardless of this setting.
+                        Disabled by default.
+                    </div>
+                </div>
+
+                <div class="inputContainer">
+                    <label
+                        class="inputLabel inputLabelUnfocused"
+                        for="MaxAudioVideoRepairsPerRun">
+                        Maximum A/V repairs per run
+                    </label>
+
+                    <input
+                        id="MaxAudioVideoRepairsPerRun"
+                        type="number"
+                        min="1"
+                        step="1"
+                        is="emby-input" />
+
+                    <div class="fieldDescription">
+                        Maximum number of files that may receive an A/V repair during
+                        one real task execution. Default: 1.
+                    </div>
+                </div>
+
+                <div class="inputContainer">
+                    <label
+                        class="inputLabel inputLabelUnfocused"
+                        for="MaxAutoRepairOffsetSeconds">
+                        Maximum auto-repair offset (seconds)
+                    </label>
+
+                    <input
+                        id="MaxAutoRepairOffsetSeconds"
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        is="emby-input" />
+
+                    <div class="fieldDescription">
+                        Largest constant audio/video offset eligible for an automatic
+                        timestamp shift. Larger offsets always require manual review.
+                    </div>
+                </div>
+
+                <div class="inputContainer">
+                    <label
+                        class="inputLabel inputLabelUnfocused"
+                        for="MaxAutoRepairDurationDeltaSeconds">
+                        Maximum auto-repair duration delta (seconds)
+                    </label>
+
+                    <input
+                        id="MaxAutoRepairDurationDeltaSeconds"
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        is="emby-input" />
+
+                    <div class="fieldDescription">
+                        Largest bounded audio/video duration difference eligible for an
+                        automatic pad or trim. A large silent intro/outro or an
+                        intentionally shorter track is never treated as an error.
+                    </div>
+                </div>
+
+                <div class="inputContainer">
+                    <label
+                        class="inputLabel inputLabelUnfocused"
+                        for="MaxAutoRepairDriftRatio">
+                        Maximum auto-repair drift ratio
+                    </label>
+
+                    <input
+                        id="MaxAutoRepairDriftRatio"
+                        type="number"
+                        min="0"
+                        step="0.001"
+                        is="emby-input" />
+
+                    <div class="fieldDescription">
+                        Largest packet-confirmed progressive drift, as a fraction of
+                        media duration, eligible for an automatic audio time-stretch.
+                    </div>
+                </div>
+
+                <div class="inputContainer">
+                    <label
+                        class="inputLabel inputLabelUnfocused"
+                        for="MinRepairConfidence">
+                        Minimum repair confidence
+                    </label>
+
+                    <input
+                        id="MinRepairConfidence"
+                        type="number"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        is="emby-input" />
+
+                    <div class="fieldDescription">
+                        Minimum classification confidence (0-1) required before a plan is
+                        auto-repair eligible. Lower-confidence anomalies always require
+                        manual review.
+                    </div>
+                </div>
+
+                <div class="inputContainer">
+                    <label
+                        class="inputLabel inputLabelUnfocused"
+                        for="AudioReencodeCodec">
+                        Audio re-encode codec
+                    </label>
+
+                    <input
+                        id="AudioReencodeCodec"
+                        type="text"
+                        is="emby-input" />
+
+                    <div class="fieldDescription">
+                        FFmpeg audio encoder used only when a repair strategy must
+                        re-encode the targeted audio track.
+                    </div>
+                </div>
+
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label>
+                        <input
+                            id="DeleteBackupAfterSuccessfulValidation"
+                            type="checkbox"
+                            is="emby-checkbox" />
+
+                        <span>Delete backup after successful validation</span>
+                    </label>
+
+                    <div class="fieldDescription">
+                        <strong>Danger:</strong> deletes the per-file backup only after
+                        the repaired file has fully passed post-replacement validation.
+                        Never deletes a backup after a failed repair or a rollback.
+                        Disabled by default.
+                    </div>
+                </div>
+
                 <h2>Scan</h2>
 
                 <div class="checkboxContainer checkboxContainer-withDescription">
@@ -484,7 +667,12 @@
                             + ' | Duration differences: ' + (value('AudioVideoDurationMismatches') ?? 0)
                             + ' | End differences: ' + (value('AudioVideoEndMismatches') ?? 0)
                             + ' | Suspected progressive drift: ' + (value('AudioVideoSuspectedDrifts') ?? 0)
-                            + ' | Incomplete timeline: ' + (value('TimelineDataIncomplete') ?? 0);
+                            + ' | Incomplete timeline: ' + (value('TimelineDataIncomplete') ?? 0)
+                            + ' | Classified constant offset: ' + (value('AvClassifiedConstantOffset') ?? 0)
+                            + ' | Classified duration mismatch: ' + (value('AvClassifiedDurationMismatch') ?? 0)
+                            + ' | Classified progressive drift: ' + (value('AvClassifiedProgressiveDrift') ?? 0)
+                            + ' | Manual review required: ' + (value('AvPlannedManualOnly') ?? 0)
+                            + ' | Queued for A/V repair: ' + (value('AvQueuedForRepair') ?? 0);
 
                         const labels = {
                             AudioVideoStartOffset: 'Audio/video start offset',
@@ -621,6 +809,42 @@
                             'StreamStartTimeToleranceSeconds',
                             config.StreamStartTimeToleranceSeconds);
 
+                        setChecked(
+                            'EnableAudioVideoRepair',
+                            config.EnableAudioVideoRepair);
+
+                        setChecked(
+                            'AllowAudioReencode',
+                            config.AllowAudioReencode);
+
+                        setValue(
+                            'MaxAudioVideoRepairsPerRun',
+                            config.MaxAudioVideoRepairsPerRun);
+
+                        setValue(
+                            'MaxAutoRepairOffsetSeconds',
+                            config.MaxAutoRepairOffsetSeconds);
+
+                        setValue(
+                            'MaxAutoRepairDurationDeltaSeconds',
+                            config.MaxAutoRepairDurationDeltaSeconds);
+
+                        setValue(
+                            'MaxAutoRepairDriftRatio',
+                            config.MaxAutoRepairDriftRatio);
+
+                        setValue(
+                            'MinRepairConfidence',
+                            config.MinRepairConfidence);
+
+                        setValue(
+                            'AudioReencodeCodec',
+                            config.AudioReencodeCodec);
+
+                        setChecked(
+                            'DeleteBackupAfterSuccessfulValidation',
+                            config.DeleteBackupAfterSuccessfulValidation);
+
                         Dashboard.hideLoadingMsg();
                     })
                     .catch(function (error) {
@@ -639,7 +863,8 @@
                     'MaxRepairAttempts',
                     'MaxRepairsPerRun',
                     'RemuxTimeoutSeconds',
-                    'ValidationTimeoutSeconds'
+                    'ValidationTimeoutSeconds',
+                    'MaxAudioVideoRepairsPerRun'
                 ];
 
                 for (const id of positiveIntegerFields) {
@@ -658,7 +883,10 @@
                 const toleranceFields = [
                     'DurationToleranceSeconds',
                     'StreamDurationToleranceSeconds',
-                    'StreamStartTimeToleranceSeconds'
+                    'StreamStartTimeToleranceSeconds',
+                    'MaxAutoRepairOffsetSeconds',
+                    'MaxAutoRepairDurationDeltaSeconds',
+                    'MaxAutoRepairDriftRatio'
                 ];
 
                 for (const id of toleranceFields) {
@@ -671,6 +899,17 @@
 
                         return false;
                     }
+                }
+
+                const confidence = getNumber('MinRepairConfidence');
+                if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
+                    window.alert('MinRepairConfidence must be between 0 and 1.');
+                    return false;
+                }
+
+                if (document.getElementById('AudioReencodeCodec').value.trim().length === 0) {
+                    window.alert('AudioReencodeCodec cannot be empty.');
+                    return false;
                 }
 
                 const pathFields = [
@@ -809,6 +1048,42 @@
 
                         config.StreamStartTimeToleranceSeconds =
                             getNumber('StreamStartTimeToleranceSeconds');
+
+                        config.EnableAudioVideoRepair =
+                            document
+                                .getElementById('EnableAudioVideoRepair')
+                                .checked;
+
+                        config.AllowAudioReencode =
+                            document
+                                .getElementById('AllowAudioReencode')
+                                .checked;
+
+                        config.MaxAudioVideoRepairsPerRun =
+                            getInteger('MaxAudioVideoRepairsPerRun');
+
+                        config.MaxAutoRepairOffsetSeconds =
+                            getNumber('MaxAutoRepairOffsetSeconds');
+
+                        config.MaxAutoRepairDurationDeltaSeconds =
+                            getNumber('MaxAutoRepairDurationDeltaSeconds');
+
+                        config.MaxAutoRepairDriftRatio =
+                            getNumber('MaxAutoRepairDriftRatio');
+
+                        config.MinRepairConfidence =
+                            getNumber('MinRepairConfidence');
+
+                        config.AudioReencodeCodec =
+                            document
+                                .getElementById('AudioReencodeCodec')
+                                .value
+                                .trim();
+
+                        config.DeleteBackupAfterSuccessfulValidation =
+                            document
+                                .getElementById('DeleteBackupAfterSuccessfulValidation')
+                                .checked;
 
                         return ApiClient
                             .updatePluginConfiguration(

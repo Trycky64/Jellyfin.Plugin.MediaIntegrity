@@ -13,12 +13,14 @@ public static class StreamTimelineValidator
     public static IReadOnlyList<TimelineValidationIssue> Validate(
         MediaScanResult source,
         MediaScanResult candidate,
-        PluginConfiguration configuration)
+        PluginConfiguration configuration,
+        IReadOnlySet<int>? intentionallyRetimedStreamIndexes = null)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(candidate);
         ArgumentNullException.ThrowIfNull(configuration);
 
+        var retimed = intentionallyRetimedStreamIndexes ?? EmptyRetimedSet;
         var issues = new List<TimelineValidationIssue>();
         var sourceByIndex = source.Streams
             .GroupBy(static stream => stream.Index)
@@ -38,7 +40,7 @@ public static class StreamTimelineValidator
                 continue;
             }
 
-            ValidateStream(sourceStream, candidateStream, configuration, issues);
+            ValidateStream(sourceStream, candidateStream, configuration, issues, retimed.Contains(sourceStream.Index));
         }
 
         foreach (var candidateStream in candidate.Streams)
@@ -55,15 +57,18 @@ public static class StreamTimelineValidator
         AddDuplicateIndexIssues(source.Streams, "source", issues);
         AddDuplicateIndexIssues(candidate.Streams, "candidate", issues);
 
-        ValidateAudioVideoRelations(source, candidate, configuration, issues);
+        ValidateAudioVideoRelations(source, candidate, configuration, issues, retimed);
         return issues;
     }
+
+    private static readonly HashSet<int> EmptyRetimedSet = [];
 
     private static void ValidateStream(
         MediaStreamInfo source,
         MediaStreamInfo candidate,
         PluginConfiguration configuration,
-        ICollection<TimelineValidationIssue> issues)
+        ICollection<TimelineValidationIssue> issues,
+        bool isIntentionallyRetimed)
     {
         if (!string.Equals(
                 source.CodecType,
@@ -109,7 +114,7 @@ public static class StreamTimelineValidator
         else
         {
             var delta = candidate.DurationSeconds.Value - source.DurationSeconds.Value;
-            if (Math.Abs(delta) > configuration.StreamDurationToleranceSeconds)
+            if (!isIntentionallyRetimed && Math.Abs(delta) > configuration.StreamDurationToleranceSeconds)
             {
                 issues.Add(Create(
                     "StreamDurationChanged",
@@ -132,7 +137,7 @@ public static class StreamTimelineValidator
         else
         {
             var delta = candidate.StartTimeSeconds.Value - source.StartTimeSeconds.Value;
-            if (Math.Abs(delta) > configuration.StreamStartTimeToleranceSeconds)
+            if (!isIntentionallyRetimed && Math.Abs(delta) > configuration.StreamStartTimeToleranceSeconds)
             {
                 issues.Add(Create(
                     "StreamStartTimeChanged",
@@ -149,7 +154,8 @@ public static class StreamTimelineValidator
         MediaScanResult source,
         MediaScanResult candidate,
         PluginConfiguration configuration,
-        ICollection<TimelineValidationIssue> issues)
+        ICollection<TimelineValidationIssue> issues,
+        IReadOnlySet<int> retimed)
     {
         var sourceVideo = source.Streams.Where(static stream => IsType(stream, "video"));
         var sourceAudio = source.Streams.Where(static stream => IsType(stream, "audio"));
@@ -172,7 +178,7 @@ public static class StreamTimelineValidator
                 var sourceDelta = video.DurationSeconds.Value - audio.DurationSeconds.Value;
                 var candidateDelta = candidateVideo.DurationSeconds.Value - candidateAudio.DurationSeconds.Value;
                 var introducedDrift = candidateDelta - sourceDelta;
-                if (Math.Abs(introducedDrift) > configuration.StreamDurationToleranceSeconds)
+                if (!retimed.Contains(audio.Index) && Math.Abs(introducedDrift) > configuration.StreamDurationToleranceSeconds)
                 {
                     issues.Add(Create(
                         "AudioVideoDriftIntroduced",
@@ -217,5 +223,3 @@ public static class StreamTimelineValidator
     private static string FormatSigned(double value) =>
         value.ToString("+0.000000;-0.000000;0.000000", CultureInfo.InvariantCulture);
 }
-
-

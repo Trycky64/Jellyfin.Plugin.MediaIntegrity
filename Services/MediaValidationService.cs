@@ -26,7 +26,8 @@ public sealed class MediaValidationService : IMediaValidationService
     public async Task<MediaValidationResult> ValidateAsync(
         string sourcePath,
         string outputPath,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlySet<int>? intentionallyRetimedStreamIndexes = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
@@ -104,7 +105,8 @@ public sealed class MediaValidationService : IMediaValidationService
             StreamTimelineValidator.Validate(
                 sourceProbe.ScanResult,
                 outputProbe.ScanResult,
-                configuration);
+                configuration,
+                intentionallyRetimedStreamIndexes);
 
         foreach (var timelineIssue in timelineIssues)
         {
