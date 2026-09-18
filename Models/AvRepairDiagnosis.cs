@@ -43,6 +43,9 @@ public sealed class AvRepairDiagnosis
     /// <summary>True when <see cref="PacketEvidence"/> was available and used for this classification.</summary>
     public bool HasPacketEvidence => PacketEvidence is not null;
 
+    /// <summary>FFprobe codec_name of the audio stream, used to decide whether AudioPad/AudioTrim can preserve it.</summary>
+    public string AudioCodecName { get; set; } = string.Empty;
+
     public string AudioLanguage { get; set; } = string.Empty;
 
     public string AudioTitle { get; set; } = string.Empty;

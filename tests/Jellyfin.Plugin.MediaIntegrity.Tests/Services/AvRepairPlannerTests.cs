@@ -122,7 +122,8 @@ public sealed class AvRepairPlannerTests
         {
             Classification = AvRepairClassification.AudioEndsEarly,
             Confidence = 0.9,
-            DurationDeltaSeconds = -1.0
+            DurationDeltaSeconds = -1.0,
+            AudioCodecName = "aac"
         };
         var plan = AvRepairPlanner.Plan(diagnosis, configuration);
         Assert.Equal(AvRepairStrategy.AudioPad, plan.Strategy);
@@ -138,11 +139,28 @@ public sealed class AvRepairPlannerTests
         {
             Classification = AvRepairClassification.AudioEndsLate,
             Confidence = 0.9,
-            DurationDeltaSeconds = 1.0
+            DurationDeltaSeconds = 1.0,
+            AudioCodecName = "ac3"
         };
         var plan = AvRepairPlanner.Plan(diagnosis, configuration);
         Assert.Equal(AvRepairStrategy.AudioTrim, plan.Strategy);
         Assert.Equal(1.0, plan.TrimSeconds);
+    }
+
+    [Fact]
+    public void AudioEndsEarly_UnknownCodec_IsManualOnly()
+    {
+        var configuration = Enabled();
+        configuration.AllowAudioReencode = true;
+        var diagnosis = new AvRepairDiagnosis
+        {
+            Classification = AvRepairClassification.AudioEndsEarly,
+            Confidence = 0.9,
+            DurationDeltaSeconds = -1.0,
+            AudioCodecName = "truehd"
+        };
+        var plan = AvRepairPlanner.Plan(diagnosis, configuration);
+        Assert.Equal(AvRepairStrategy.ManualOnly, plan.Strategy);
     }
 
     [Fact]

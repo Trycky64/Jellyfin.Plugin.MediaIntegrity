@@ -27,6 +27,11 @@
 - Add an `A/V Repair` scheduled task, independent from `Media Remux Repair`,
   and expose classification/repair counters via the existing configuration
   page and a new `MediaIntegrity/LastAvRepairRun` endpoint.
+- `AudioPad`/`AudioTrim` preserve the source audio track's own codec (a small,
+  explicit set of known-safe encoders) instead of forcing a fixed re-encode
+  codec; a source codec with no known safe encoder is left `ManualOnly`
+  rather than silently transcoded. `AudioTimeStretch` is unaffected and
+  still uses the configurable `AudioReencodeCodec`.
 - Support multiple audio tracks per file: each track is classified and planned
   independently. Automatic execution is limited to files where exactly one
   track needs a repair; a file where two or more tracks would each need one

@@ -132,7 +132,12 @@ public static class AvRepairEndToEnd
         string sourceRoot, string repairRoot, MediaProbeService probe, AvRepairExecutionService executionService,
         MediaValidationService validationService, MediaReplacementService replacementService, PluginConfiguration configuration)
     {
-        var relative = Path.Combine("Movies", "E2E-AudioPad", "test.mp4");
+        // Deliberately mp3/mkv, not aac/mp4: this exact combination is what a
+        // real-library pilot run found broken (AvRepairExecutionService forced
+        // the configured AudioReencodeCodec instead of preserving the source
+        // codec, which MediaValidationService's codec-identity check then
+        // correctly rejected). This fixture reproduces that real failure mode.
+        var relative = Path.Combine("Movies", "E2E-AudioPad", "test.mkv");
         var source = Path.Combine(sourceRoot, relative);
         Directory.CreateDirectory(Path.GetDirectoryName(source)!);
         await RunFfmpeg(
@@ -140,7 +145,7 @@ public static class AvRepairEndToEnd
             "-f", "lavfi", "-i", "testsrc=size=64x64:rate=10:duration=8",
             "-f", "lavfi", "-i", "sine=frequency=440:duration=7",
             "-map", "0:v", "-map", "1:a", "-c:v", "libx264", "-g", "5", "-keyint_min", "5", "-pix_fmt", "yuv420p",
-            "-c:a", "aac", "-ar", "48000", "-ac", "2", source);
+            "-c:a", "libmp3lame", "-ar", "48000", "-ac", "2", source);
         MirrorToRepairRoot(sourceRoot, repairRoot, relative);
 
         var beforeProbe = await probe.ProbeAsync(source, 30, CancellationToken.None);

@@ -249,22 +249,29 @@ public sealed class AvRepairExecutionService
                 break;
 
             case AvRepairStrategy.AudioPad:
-                AddAudioFilter(args, audioOrdinal, audioReencodeCodec, orderedStreams[FindIndex(orderedStreams, plan.AudioStreamIndex)],
-                    $"apad=pad_dur={(plan.PadSeconds ?? 0).ToString("0.000000", CultureInfo.InvariantCulture)}");
-                break;
-
-            case AvRepairStrategy.AudioTrim:
-                var audioStream = orderedStreams[FindIndex(orderedStreams, plan.AudioStreamIndex)];
-                var targetDuration = (audioStream.DurationSeconds ?? 0) - (plan.TrimSeconds ?? 0);
-                if (targetDuration <= 0)
                 {
-                    throw new InvalidOperationException(
-                        "Computed trim target duration is not positive; refusing to build an unsafe trim.");
+                    var audioStream = orderedStreams[FindIndex(orderedStreams, plan.AudioStreamIndex)];
+                    var encoder = ResolvePreservingEncoder(audioStream.CodecName);
+                    AddAudioFilter(args, audioOrdinal, encoder, audioStream,
+                        $"apad=pad_dur={(plan.PadSeconds ?? 0).ToString("0.000000", CultureInfo.InvariantCulture)}");
+                    break;
                 }
 
-                AddAudioFilter(args, audioOrdinal, audioReencodeCodec, audioStream,
-                    $"atrim=end={targetDuration.ToString("0.000000", CultureInfo.InvariantCulture)}");
-                break;
+            case AvRepairStrategy.AudioTrim:
+                {
+                    var audioStream = orderedStreams[FindIndex(orderedStreams, plan.AudioStreamIndex)];
+                    var targetDuration = (audioStream.DurationSeconds ?? 0) - (plan.TrimSeconds ?? 0);
+                    if (targetDuration <= 0)
+                    {
+                        throw new InvalidOperationException(
+                            "Computed trim target duration is not positive; refusing to build an unsafe trim.");
+                    }
+
+                    var encoder = ResolvePreservingEncoder(audioStream.CodecName);
+                    AddAudioFilter(args, audioOrdinal, encoder, audioStream,
+                        $"atrim=end={targetDuration.ToString("0.000000", CultureInfo.InvariantCulture)}");
+                    break;
+                }
 
             case AvRepairStrategy.StreamCopyRemux:
                 // No per-stream filter: the container itself is rewritten with pure stream copy.
@@ -309,6 +316,48 @@ public sealed class AvRepairExecutionService
         stages.Add(remaining);
         return string.Join(",", stages.Select(
             static stage => $"atempo={stage.ToString("0.000000", CultureInfo.InvariantCulture)}"));
+    }
+
+    /// <summary>
+    /// Audio codecs for which FFmpeg's encoder name is known and safe to use
+    /// to preserve codec identity across an AudioPad/AudioTrim edit. Deliberately
+    /// narrow: an unlisted codec (for example a lossless format with no free
+    /// encoder, such as TrueHD) is never guessed at.
+    /// </summary>
+    private static readonly Dictionary<string, string> PreservingEncoderMap =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["aac"] = "aac",
+            ["ac3"] = "ac3",
+            ["eac3"] = "eac3",
+            ["flac"] = "flac",
+            ["mp3"] = "libmp3lame",
+            ["opus"] = "libopus",
+            ["vorbis"] = "libvorbis",
+            ["alac"] = "alac",
+            ["pcm_s16le"] = "pcm_s16le",
+            ["pcm_s24le"] = "pcm_s24le",
+            ["pcm_s32le"] = "pcm_s32le"
+        };
+
+    /// <summary>
+    /// True when <paramref name="sourceCodecName"/> has a known FFmpeg encoder
+    /// that preserves codec identity. Used by <see cref="AvRepairPlanner"/> to
+    /// refuse AudioPad/AudioTrim upfront, before any FFmpeg invocation, when the
+    /// source codec cannot be safely preserved.
+    /// </summary>
+    public static bool CanPreserveCodec(string sourceCodecName) =>
+        !string.IsNullOrEmpty(sourceCodecName) && PreservingEncoderMap.ContainsKey(sourceCodecName);
+
+    private static string ResolvePreservingEncoder(string sourceCodecName)
+    {
+        if (!string.IsNullOrEmpty(sourceCodecName) && PreservingEncoderMap.TryGetValue(sourceCodecName, out var encoder))
+        {
+            return encoder;
+        }
+
+        throw new InvalidOperationException(
+            $"No safe codec-preserving encoder is known for source audio codec '{sourceCodecName}'.");
     }
 
     private static int FindIndex(IReadOnlyList<MediaStreamInfo> streams, int index)

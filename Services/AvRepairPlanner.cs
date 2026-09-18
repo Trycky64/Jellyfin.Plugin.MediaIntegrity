@@ -203,6 +203,18 @@ public static class AvRepairPlanner
                 $"({Format(configuration.MaxAutoRepairDurationDeltaSeconds)}s).");
         }
 
+        // AudioPad/AudioTrim must preserve the source audio codec exactly (they
+        // are meant to be minimal edits, not transcodes). If FFmpeg has no known
+        // safe encoder matching the source codec, refuse rather than silently
+        // switching codec (which the existing stream-identity validation would
+        // reject anyway, after an expensive wasted FFmpeg pass).
+        if (!AvRepairExecutionService.CanPreserveCodec(diagnosis.AudioCodecName))
+        {
+            return ManualOnly(plan,
+                $"No safe codec-preserving encoder is known for source audio codec " +
+                $"'{diagnosis.AudioCodecName}'; refusing to transcode to a different codec.");
+        }
+
         plan.IsStreamCopySafe = false;
         plan.RequiresAudioReencode = true;
 

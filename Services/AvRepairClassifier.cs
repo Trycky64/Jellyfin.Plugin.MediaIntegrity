@@ -51,6 +51,7 @@ public static class AvRepairClassifier
             VideoStreamIndex = video.Index,
             AudioStreamIndex = audio.Index,
             PacketEvidence = packetEvidence,
+            AudioCodecName = audio.CodecName,
             AudioLanguage = audio.Language,
             AudioTitle = audio.Title,
             AudioIsDefault = audio.IsDefault,

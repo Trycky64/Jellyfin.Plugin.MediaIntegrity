@@ -26,7 +26,7 @@ Repair strategies, run by the independent **A/V Repair** scheduled task:
 | AudioEndsLate | AudioTrim (`atrim`) | Only the targeted audio track | `EnableAudioVideoRepair` + `AllowAudioReencode` |
 | everything else | ManualOnly | Nothing (no repair is attempted) | — |
 
-**Video is never re-encoded by any strategy, under any configuration.** `AudioPad`/`AudioTrim` re-encode the one targeted audio track even though the edit is a clean silence pad or edge trim, because FFmpeg's `apad`/`atrim` filters require decoding that track; this is why they are gated by `AllowAudioReencode` exactly like time-stretch, not treated as "free" like a stream copy.
+**Video is never re-encoded by any strategy, under any configuration.** `AudioPad`/`AudioTrim` re-encode the one targeted audio track even though the edit is a clean silence pad or edge trim, because FFmpeg's `apad`/`atrim` filters require decoding that track; this is why they are gated by `AllowAudioReencode` exactly like time-stretch, not treated as "free" like a stream copy. Unlike `AudioTimeStretch`, they always preserve the source track's own codec (from a small, explicit, known-safe set) rather than transcoding to `AudioReencodeCodec`; a source codec with no known safe encoder is left `ManualOnly`.
 
 Every A/V repair reuses the same transactional pipeline as remux repair: the candidate is built outside the source tree, probed and compared against the source (stream identity, timeline tolerance, chapters, full packet-copy pass), re-classified to confirm the targeted anomaly is actually gone, backed up, replaced, and validated again after the swap — with automatic rollback to the verified backup on any failure.
 
@@ -110,7 +110,7 @@ Never make `/media` writable. Create the backup and cache directories before sta
 | MaxAutoRepairDurationDeltaSeconds | 2.0 | Largest bounded duration delta eligible for automatic AudioPad/AudioTrim |
 | MaxAutoRepairDriftRatio | 0.02 | Largest packet-confirmed drift, as a fraction of duration, eligible for automatic AudioTimeStretch |
 | MinRepairConfidence | 0.75 | Minimum classification confidence required for auto-repair eligibility |
-| AudioReencodeCodec | aac | FFmpeg encoder used only when a strategy must re-encode an audio track |
+| AudioReencodeCodec | aac | FFmpeg encoder used only for AudioTimeStretch; AudioPad/AudioTrim always preserve the source track's own codec instead |
 | DeleteBackupAfterSuccessfulValidation | false | Deletes the per-file backup only after full post-replacement validation succeeds |
 
 Supported video extensions: MP4, M4V, MKV, WebM, MOV, AVI, TS, M2TS, MTS, MPG, MPEG.

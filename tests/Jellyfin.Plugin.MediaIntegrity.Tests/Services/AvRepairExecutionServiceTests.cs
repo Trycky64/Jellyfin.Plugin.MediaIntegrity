@@ -64,6 +64,64 @@ public sealed class AvRepairExecutionServiceTests
     }
 
     [Fact]
+    public void AudioPad_PreservesSourceCodecInsteadOfConfiguredDefault()
+    {
+        // Stream 1 is "aac" in Streams(); use a source with a different codec
+        // to prove the configured "aac" default is ignored for pad/trim.
+        var streams = Streams();
+        streams[1].CodecName = "mp3";
+        var plan = new AvRepairPlan { Strategy = AvRepairStrategy.AudioPad, AudioStreamIndex = 1, PadSeconds = 0.5 };
+        var start = BuildStartInfo("/media/f.mkv", "/cache/out.mkv", streams, plan);
+        var args = start.ArgumentList.ToList();
+        Assert.Equal("libmp3lame", args[args.IndexOf("-c:a:0") + 1]);
+    }
+
+    [Fact]
+    public void AudioTrim_PreservesSourceCodecInsteadOfConfiguredDefault()
+    {
+        var streams = Streams();
+        streams[1].CodecName = "ac3";
+        var plan = new AvRepairPlan { Strategy = AvRepairStrategy.AudioTrim, AudioStreamIndex = 1, TrimSeconds = 1.0 };
+        var start = BuildStartInfo("/media/f.mkv", "/cache/out.mkv", streams, plan);
+        var args = start.ArgumentList.ToList();
+        Assert.Equal("ac3", args[args.IndexOf("-c:a:0") + 1]);
+    }
+
+    [Fact]
+    public void AudioTimeStretch_UsesConfiguredCodecNotSourceCodec()
+    {
+        // Unlike pad/trim, time-stretch is an intentional re-encode and keeps
+        // using the configurable AudioReencodeCodec regardless of source codec.
+        var streams = Streams();
+        streams[1].CodecName = "mp3";
+        var plan = new AvRepairPlan { Strategy = AvRepairStrategy.AudioTimeStretch, AudioStreamIndex = 1, AtempoFactor = 1.01 };
+        var start = BuildStartInfo("/media/f.mkv", "/cache/out.mkv", streams, plan);
+        var args = start.ArgumentList.ToList();
+        Assert.Equal("aac", args[args.IndexOf("-c:a:0") + 1]);
+    }
+
+    [Fact]
+    public void AudioPad_UnknownSourceCodec_Throws()
+    {
+        var streams = Streams();
+        streams[1].CodecName = "truehd";
+        var plan = new AvRepairPlan { Strategy = AvRepairStrategy.AudioPad, AudioStreamIndex = 1, PadSeconds = 0.5 };
+        Assert.Throws<InvalidOperationException>(() => BuildStartInfo("/media/f.mkv", "/cache/out.mkv", streams, plan));
+    }
+
+    [Theory]
+    [InlineData("aac", true)]
+    [InlineData("ac3", true)]
+    [InlineData("mp3", true)]
+    [InlineData("truehd", false)]
+    [InlineData("dts", false)]
+    [InlineData("", false)]
+    public void CanPreserveCodec_MatchesKnownEncoderMap(string codec, bool expected)
+    {
+        Assert.Equal(expected, AvRepairExecutionService.CanPreserveCodec(codec));
+    }
+
+    [Fact]
     public void AudioTrim_ComputesEndFromSourceDurationMinusTrim()
     {
         var plan = new AvRepairPlan { Strategy = AvRepairStrategy.AudioTrim, AudioStreamIndex = 1, TrimSeconds = 1.0 };
